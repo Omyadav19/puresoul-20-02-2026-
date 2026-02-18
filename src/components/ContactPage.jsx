@@ -9,16 +9,38 @@ const ContactPage = ({ isSection = false }) => {
   const { theme, toggleTheme } = useApp();
   const [sent, setSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:5000';
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const res = await fetch(`${API_BASE}/api/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, message })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to send message');
+      }
+
       setSent(true);
-      setIsSubmitting(false);
+      setEmail('');
+      setMessage('');
       setTimeout(() => setSent(false), 5000);
-    }, 1500);
+    } catch (err) {
+      console.error('Contact submit error:', err);
+      setError(err.message || 'Error sending message');
+      // auto-clear after a short time
+      setTimeout(() => setError(''), 7000);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -166,6 +188,8 @@ const ContactPage = ({ isSection = false }) => {
               <input
                 required
                 type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="hello@example.com"
                 className={`w-full px-6 py-4 rounded-xl border transition-all duration-300 outline-none focus:ring-2 focus:ring-blue-500/20 ${theme === 'dark'
                   ? 'bg-black/20 border-white/10 text-white placeholder-slate-500'
@@ -181,6 +205,8 @@ const ContactPage = ({ isSection = false }) => {
               <textarea
                 required
                 rows={6}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
                 placeholder="How can we help you today?"
                 className={`w-full px-6 py-4 rounded-xl border transition-all duration-300 outline-none focus:ring-2 focus:ring-blue-500/20 resize-none ${theme === 'dark'
                   ? 'bg-black/20 border-white/10 text-white placeholder-slate-500'
@@ -221,6 +247,17 @@ const ContactPage = ({ isSection = false }) => {
               >
                 <CheckCircle className="w-5 h-5" />
                 <span className="font-medium text-sm">Message sent successfully! We'll be in touch soon.</span>
+              </motion.div>
+            )}
+
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`p-4 rounded-xl flex items-center gap-3 ${theme === 'dark' ? 'bg-rose-600/20 text-rose-300' : 'bg-rose-100 text-rose-700'
+                  }`}
+              >
+                <span className="font-medium text-sm">{error}</span>
               </motion.div>
             )}
           </form>

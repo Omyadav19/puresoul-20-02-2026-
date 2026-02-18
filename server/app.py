@@ -15,7 +15,7 @@ from elevenlabs import ElevenLabs
 from functools import wraps
 
 from validation import validate_email, validate_username, validate_password
-from models import db, User, TherapySession, TherapyMessage
+from models import db, User, TherapySession, TherapyMessage, ContactUs
 
 print("🔥 RUNNING UPDATED app.py FILE (Pro System) 🔥")
 
@@ -396,6 +396,32 @@ def use_credit(current_user):
         'message': 'Credit deducted',
         'credits': current_user.credits
     }), 200
+
+
+@app.route('/api/contact', methods=['POST'])
+def receive_contact():
+    """Store incoming contact messages in the database."""
+    try:
+        data = request.get_json() or {}
+        email = (data.get('email') or '').strip()
+        message = (data.get('message') or '').strip()
+
+        if not email or not validate_email(email):
+            return jsonify({'message': 'Invalid email.'}), 400
+
+        if not message:
+            return jsonify({'message': 'Message is required.'}), 400
+
+        contact = ContactUs(email=email.lower(), message=message)
+        db.session.add(contact)
+        db.session.commit()
+
+        return jsonify({'message': 'Contact saved. Thank you!'}), 201
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Contact endpoint error: {e}")
+        return jsonify({'message': 'Server error saving contact.'}), 500
 
 
 @app.route('/api/credits/buy', methods=['POST'])
