@@ -65,11 +65,11 @@ const EmotionDetectionPage = () => {
         setModelReady(true);
         console.log('MediaPipe emotion detection initialized successfully');
       } else {
-        throw new Error('Failed to initialize MediaPipe emotion detector');
+        throw new Error('Could not initialize MediaPipe. This might be a browser compatibility issue.');
       }
     } catch (error) {
       console.error('Error initializing MediaPipe emotion detector:', error);
-      setDetectionError('Failed to load detection models. Please refresh and try again.');
+      setDetectionError(`Neural engine failed: ${error.message || 'Check your internet connection'}`);
     } finally {
       setIsModelLoading(false);
     }
@@ -77,21 +77,48 @@ const EmotionDetectionPage = () => {
 
   const requestCameraPermission = async () => {
     try {
+      console.log('Requesting camera permission...');
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: 'user'
+        }
       });
+
+      console.log('Camera permission granted');
       setStream(mediaStream);
       setHasPermission(true);
+
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        videoRef.current.play();
-        videoRef.current.onloadedmetadata = () => {
+
+        // Use multiple events to ensure initialization
+        const handleVideoReady = () => {
+          console.log('Video stream ready, initializing detector...');
           initializeEmotionDetector();
         };
+
+        videoRef.current.onloadedmetadata = handleVideoReady;
+        videoRef.current.onloadeddata = handleVideoReady;
+
+        // Fallback: If events don't fire within 2s, try anyway if video seems active
+        setTimeout(() => {
+          if (!modelReady && !isModelLoading) {
+            handleVideoReady();
+          }
+        }, 3000);
+
+        try {
+          await videoRef.current.play();
+        } catch (playError) {
+          console.error('Error playing video:', playError);
+        }
       }
     } catch (error) {
-      console.error('Camera permission denied:', error);
+      console.error('Camera permission denied or error:', error);
       setHasPermission(false);
+      setDetectionError('Could not access camera. Please check permissions and refresh.');
     }
   };
 
@@ -105,7 +132,14 @@ const EmotionDetectionPage = () => {
   };
 
   const performEmotionDetection = async () => {
-    if (!emotionDetectorRef.current || !modelReady || !videoRef.current || !canvasRef.current || videoRef.current.videoWidth === 0) return;
+    if (!emotionDetectorRef.current || !modelReady || !videoRef.current || !canvasRef.current) return;
+
+    // Log if video isn't ready yet
+    if (videoRef.current.videoWidth === 0) {
+      console.log('Waiting for video frames...');
+      return;
+    }
+
     try {
       const result = await emotionDetectorRef.current.detectEmotionFromVideo(videoRef.current, canvasRef.current);
       if (result) {
@@ -128,7 +162,7 @@ const EmotionDetectionPage = () => {
       }
     } catch (error) {
       console.error('MediaPipe emotion detection error:', error);
-      setDetectionError('Error during emotion detection. Please try again.');
+      // Don't show error immediately as it might be transient
     }
   };
 
@@ -455,6 +489,14 @@ const EmotionDetectionPage = () => {
                     <>
                       <video ref={videoRef} className="w-full h-full object-cover transform scale-x-[-1]" autoPlay muted playsInline />
                       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none transform scale-x-[-1]" />
+
+                      {/* Loading/Status Overlays */}
+                      {!modelReady && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm z-20">
+                          <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
+                          <p className="text-white font-bold tracking-wide">Initializing Neural Engine...</p>
+                        </div>
+                      )}
 
                       {/* Tech Overlay Elements */}
                       <div className="absolute inset-0 pointer-events-none">
