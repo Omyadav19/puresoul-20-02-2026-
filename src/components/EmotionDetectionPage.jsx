@@ -563,15 +563,7 @@ const EmotionDetectionPage = () => {
                         <div className="absolute bottom-4 left-4 w-12 h-12 border-l-4 border-b-4 border-white/30 rounded-bl-xl" />
                         <div className="absolute bottom-4 right-4 w-12 h-12 border-r-4 border-b-4 border-white/30 rounded-br-xl" />
 
-                        {/* Silent Loading Indicator (Minimal) */}
-                        {!modelReady && isDetecting && (
-                          <div className="absolute top-6 right-6 flex items-center gap-2 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
-                            <div className="w-2 h-2 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                            <span className="text-white/60 text-[10px] font-bold uppercase tracking-wider">AI Warming Up...</span>
-                          </div>
-                        )}
-
-                        {isDetecting && modelReady && (
+                        {isDetecting && (
                           <div className="absolute top-6 left-6 flex items-center gap-2 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
                             <span className="relative flex h-2.5 w-2.5">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -584,31 +576,22 @@ const EmotionDetectionPage = () => {
                     </>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full text-slate-500 p-12 text-center">
-                      {isModelLoading ? (
-                        <div className="flex flex-col items-center gap-4">
-                          <div className="relative w-16 h-16">
-                            <div className="absolute inset-0 border-t-4 border-blue-500 rounded-full animate-spin"></div>
-                          </div>
-                          <p className="font-medium animate-pulse">Initializing Neural Engine...</p>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center max-w-sm">
-                          <CameraOff className="w-16 h-16 mx-auto mb-6 opacity-30" />
-                          <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Webcam Not Active</h3>
-                          <p className="text-sm mb-8 opacity-60">Please allow camera access and ensure no other app is using it.</p>
+                      <div className="flex flex-col items-center max-w-sm">
+                        <CameraOff className="w-16 h-16 mx-auto mb-6 opacity-30" />
+                        <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Webcam Not Active</h3>
+                        <p className="text-sm mb-8 opacity-60">Please allow camera access and ensure no other app is using it.</p>
 
-                          <button
-                            onClick={retryCamera}
-                            className={`flex items-center gap-3 px-8 py-3.5 rounded-2xl font-bold transition-all active:scale-95 ${theme === 'dark'
-                              ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20'
-                              : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl'
-                              }`}
-                          >
-                            <Camera className="w-5 h-5" />
-                            Enable Webcam
-                          </button>
-                        </div>
-                      )}
+                        <button
+                          onClick={retryCamera}
+                          className={`flex items-center gap-3 px-8 py-3.5 rounded-2xl font-bold transition-all active:scale-95 ${theme === 'dark'
+                            ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20'
+                            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl'
+                            }`}
+                        >
+                          <Camera className="w-5 h-5" />
+                          Enable Webcam
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
