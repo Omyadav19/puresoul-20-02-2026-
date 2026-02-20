@@ -12,7 +12,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import { useCredits } from '../context/CreditContext.jsx';
-import MediaPipeEmotionDetector from '../utils/mediapipeDetection.js';
+import MediaPipeEmotionDetector from '../utils/emotionDetection.js';
 
 const EmotionDetectionPage = () => {
   const navigate = useNavigate();
@@ -108,36 +108,7 @@ const EmotionDetectionPage = () => {
       addLog('Camera access GRANTED');
       setStream(mediaStream);
       setHasPermission(true);
-
-      if (videoRef.current) {
-        addLog('Attaching stream to video tag');
-        videoRef.current.srcObject = mediaStream;
-
-        const handleVideoReady = () => {
-          if (videoRef.current && videoRef.current.videoWidth > 0) {
-            addLog(`Video feed active: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`);
-            initializeEmotionDetector();
-          }
-        };
-
-        videoRef.current.onloadedmetadata = handleVideoReady;
-        videoRef.current.onloadeddata = handleVideoReady;
-
-        // Fallback for browsers with slow metadata
-        setTimeout(() => {
-          if (!modelReady && !isModelLoading) {
-            addLog('Metadata timeout, checking manually');
-            handleVideoReady();
-          }
-        }, 3000);
-
-        try {
-          await videoRef.current.play();
-          addLog('Video playback started');
-        } catch (playError) {
-          addLog(`Playback error: ${playError.message}`);
-        }
-      }
+      // Logic for attaching stream moved to useEffect to prevent "double-click" bug
     } catch (error) {
       addLog(`Camera Error: ${error.name}`);
       setHasPermission(false);
@@ -197,6 +168,7 @@ const EmotionDetectionPage = () => {
   };
 
   const retryCamera = () => {
+    addLog('Retrying camera activation...');
     setDetectionError(null);
     setHasPermission(null);
     requestCameraPermission();
@@ -302,6 +274,36 @@ const EmotionDetectionPage = () => {
       if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
     };
   }, [isDetecting, hasPermission, modelReady, showEmotionPopup, showCalmingTips]);
+
+  // Handle stream attachment when video element is ready (Fixes "two click" bug)
+  useEffect(() => {
+    if (hasPermission && stream && videoRef.current && !videoRef.current.srcObject) {
+      addLog('Syncing stream to video tag...');
+      videoRef.current.srcObject = stream;
+
+      const handleVideoReady = () => {
+        if (videoRef.current && videoRef.current.videoWidth > 0) {
+          addLog(`Video feed active: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`);
+          initializeEmotionDetector();
+        }
+      };
+
+      videoRef.current.onloadedmetadata = handleVideoReady;
+      videoRef.current.onloadeddata = handleVideoReady;
+
+      videoRef.current.play().catch(playError => {
+        addLog(`Playback error: ${playError.message}`);
+      });
+
+      // Fallback manual trigger
+      setTimeout(() => {
+        if (videoRef.current && videoRef.current.videoWidth > 0 && !modelReady && !isModelLoading) {
+          addLog('Safety trigger for AI engine');
+          handleVideoReady();
+        }
+      }, 2000);
+    }
+  }, [hasPermission, stream]);
 
   const EmotionIconComponent = currentEmotionState ? emotionDataMap[currentEmotionState.emotion].component : Camera;
 
