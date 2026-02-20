@@ -77,19 +77,31 @@ class AdvancedFaceDetector {
       );
       const confidence = expressions[dominantExpression];
 
-      // Draw expression label
+      // --- FIX MIRRORED TEXT ---
+      ctx.save();
+      const labelHeight = 35;
       const labelY = box.y - 10;
       const labelText = `${dominantExpression.toUpperCase()} (${Math.round(confidence * 100)}%)`;
-
-      // Background for text
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
       const textWidth = ctx.measureText(labelText).width;
-      ctx.fillRect(box.x, labelY - 25, textWidth + 10, 30);
+      const padding = 10;
+      const totalWidth = textWidth + padding;
+
+      // Position and Flip
+      ctx.translate(box.x, labelY - 25);
+      ctx.scale(-1, 1);
+      ctx.translate(-totalWidth, 0);
+
+      // Background
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.beginPath();
+      ctx.roundRect(0, 0, totalWidth, 30, 6);
+      ctx.fill();
 
       // Text
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 16px Arial';
-      ctx.fillText(labelText, box.x + 5, labelY - 5);
+      ctx.fillText(labelText, padding / 2, 21);
+      ctx.restore();
 
       // Draw landmarks (optional)
       if (detection.landmarks) {
