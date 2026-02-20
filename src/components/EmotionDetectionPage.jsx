@@ -38,6 +38,7 @@ const EmotionDetectionPage = () => {
   const [detectionError, setDetectionError] = useState(null);
   const [scanProgress, setScanProgress] = useState(0);
   const [debugLogs, setDebugLogs] = useState([]);
+  const [isActivating, setIsActivating] = useState(false);
 
   const addLog = (msg) => {
     console.log(`[SYS] ${msg}`);
@@ -62,7 +63,7 @@ const EmotionDetectionPage = () => {
   };
 
   const initializeEmotionDetector = async () => {
-    if (emotionDetectorRef.current && modelReady) return;
+    if (emotionDetectorRef.current && (modelReady || isModelLoading)) return;
     setIsModelLoading(true);
     setDetectionError(null);
     addLog('Starting AI Neural Engine...');
@@ -108,11 +109,12 @@ const EmotionDetectionPage = () => {
       addLog('Camera access GRANTED');
       setStream(mediaStream);
       setHasPermission(true);
-      // Logic for attaching stream moved to useEffect to prevent "double-click" bug
+      return mediaStream;
     } catch (error) {
       addLog(`Camera Error: ${error.name}`);
       setHasPermission(false);
       setDetectionError(`Camera Blocked: ${error.message}. Please click the lock icon next to the URL bar and allow 'Camera'.`);
+      return null;
     }
   };
 
@@ -167,11 +169,37 @@ const EmotionDetectionPage = () => {
     navigate('/therapy-session', { state: { category: 'Just Talk', initialEmotion: dominantEmotion } });
   };
 
+  const handleEnableEverything = async () => {
+    if (isActivating || (hasPermission && modelReady)) return;
+    setIsActivating(true);
+    addLog('Automatically activating Camera & AI...');
+
+    try {
+      // 1. Start AI model loading immediately (Parallel)
+      const modelPromise = initializeEmotionDetector();
+
+      // 2. Request camera
+      const cameraStream = await requestCameraPermission();
+
+      if (!cameraStream) {
+        setIsActivating(false);
+        return;
+      }
+
+      // Wait briefly for model, though useEffect will handle it too
+      await Promise.race([modelPromise, new Promise(r => setTimeout(r, 2000))]);
+
+    } catch (err) {
+      console.error("Auto-activation failed", err);
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
   const retryCamera = () => {
-    addLog('Retrying camera activation...');
     setDetectionError(null);
     setHasPermission(null);
-    requestCameraPermission();
+    handleEnableEverything();
   };
 
   const handleCloseTips = () => {
@@ -246,15 +274,17 @@ const EmotionDetectionPage = () => {
 
   // --- REACT LIFECYCLE HOOKS ---
   useEffect(() => {
-    if (!user) navigate('/login');
-    // else if (hasPermission === null) requestCameraPermission(); // Disabled auto-request per user request
-    else if (hasPermission === null) setHasPermission(false); // Default to not active to show the enable button
+    if (!user) {
+      navigate('/login');
+    } else if (hasPermission === null && !isActivating) {
+      handleEnableEverything();
+    }
     return () => {
       if (stream) stream.getTracks().forEach(track => track.stop());
       if (emotionDetectorRef.current) emotionDetectorRef.current.dispose();
       if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
     };
-  }, [user, hasPermission, stream, navigate]);
+  }, [user, hasPermission, stream, navigate, isActivating]);
 
   // --- UPDATED useEffect FOR AUTOMATIC DETECTION ---
   useEffect(() => {
@@ -275,7 +305,7 @@ const EmotionDetectionPage = () => {
     };
   }, [isDetecting, hasPermission, modelReady, showEmotionPopup, showCalmingTips]);
 
-  // Handle stream attachment when video element is ready (Fixes "two click" bug)
+  // Handle stream attachment and initialization trigger
   useEffect(() => {
     if (hasPermission && stream && videoRef.current && !videoRef.current.srcObject) {
       addLog('Syncing stream to video tag...');
@@ -284,7 +314,10 @@ const EmotionDetectionPage = () => {
       const handleVideoReady = () => {
         if (videoRef.current && videoRef.current.videoWidth > 0) {
           addLog(`Video feed active: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`);
-          initializeEmotionDetector();
+          // Ensure model is starting if not already
+          if (!modelReady && !isModelLoading) {
+            initializeEmotionDetector();
+          }
         }
       };
 
@@ -295,15 +328,17 @@ const EmotionDetectionPage = () => {
         addLog(`Playback error: ${playError.message}`);
       });
 
-      // Fallback manual trigger
-      setTimeout(() => {
+      // Fallback check
+      const checkInterval = setInterval(() => {
         if (videoRef.current && videoRef.current.videoWidth > 0 && !modelReady && !isModelLoading) {
-          addLog('Safety trigger for AI engine');
           handleVideoReady();
+          clearInterval(checkInterval);
         }
-      }, 2000);
+      }, 1000);
+
+      return () => clearInterval(checkInterval);
     }
-  }, [hasPermission, stream]);
+  }, [hasPermission, stream, modelReady, isModelLoading]);
 
   const EmotionIconComponent = currentEmotionState ? emotionDataMap[currentEmotionState.emotion].component : Camera;
 
@@ -586,14 +621,24 @@ const EmotionDetectionPage = () => {
                         <p className="text-sm mb-8 opacity-60">Please allow camera access and ensure no other app is using it.</p>
 
                         <button
-                          onClick={retryCamera}
+                          onClick={handleEnableEverything}
+                          disabled={isActivating}
                           className={`flex items-center gap-3 px-8 py-3.5 rounded-2xl font-bold transition-all active:scale-95 ${theme === 'dark'
-                            ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20'
-                            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl'
-                            }`}
+                            ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20 disabled:bg-blue-800'
+                            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl disabled:bg-blue-400'
+                            } ${isActivating ? 'cursor-not-allowed opacity-70' : ''}`}
                         >
-                          <Camera className="w-5 h-5" />
-                          Enable Webcam
+                          {isActivating ? (
+                            <div className="flex items-center gap-2">
+                              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              Waking up AI...
+                            </div>
+                          ) : (
+                            <>
+                              <Camera className="w-5 h-5" />
+                              Enable Webcam
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>
