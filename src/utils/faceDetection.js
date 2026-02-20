@@ -1,134 +1,115 @@
 import * as faceapi from 'face-api.js';
 
+// Maps face-api.js expression names to our internal names
+const EXPRESSION_MAP = {
+  neutral: 'neutral',
+  happy: 'happy',
+  sad: 'sad',
+  angry: 'angry',
+  fearful: 'fear',
+  disgusted: 'disgust',
+  surprised: 'surprised',
+};
+
 class AdvancedFaceDetector {
   constructor() {
     this.isInitialized = false;
-    this.models = {
-      detection: null,
-      landmarks: null,
-      recognition: null,
-      expression: null
-    };
-    this.emotions = ['neutral', 'happy', 'sad', 'angry', 'fearful', 'disgusted', 'surprised'];
+    this.isLoading = false;
   }
 
   async initialize() {
+    if (this.isInitialized) return true;
+    if (this.isLoading) return false;
+    this.isLoading = true;
+
     try {
-      console.log('Loading face-api.js models...');
-      
-      // Load models from CDN
-      const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
-      
+      console.log('[FaceAPI] Loading models...');
+      // Use jsDelivr CDN - very fast and reliable globally
+      const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+
       await Promise.all([
         faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-        faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
+        faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
       ]);
 
       this.isInitialized = true;
-      console.log('Face-api.js models loaded successfully');
+      console.log('[FaceAPI] Models loaded successfully');
       return true;
     } catch (error) {
-      console.error('Failed to load face-api.js models:', error);
-      return false;
+      console.error('[FaceAPI] Failed to load models:', error);
+      // Try alternative CDN as fallback
+      try {
+        console.log('[FaceAPI] Trying fallback CDN...');
+        const FALLBACK_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(FALLBACK_URL),
+          faceapi.nets.faceExpressionNet.loadFromUri(FALLBACK_URL),
+        ]);
+        this.isInitialized = true;
+        console.log('[FaceAPI] Initialized via fallback CDN');
+        return true;
+      } catch (fallbackError) {
+        console.error('[FaceAPI] Fallback also failed:', fallbackError);
+        return false;
+      }
+    } finally {
+      this.isLoading = false;
     }
   }
 
-  async detectFacesAndExpressions(videoElement) {
-    if (!this.isInitialized || !videoElement) {
-      return null;
-    }
+  async detectEmotionFromVideo(videoElement, canvasElement) {
+    if (!this.isInitialized || !videoElement) return null;
+    if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) return null;
 
     try {
-      // Detect faces with landmarks and expressions
-      const detections = await faceapi
-        .detectAllFaces(videoElement, new faceapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks()
+      // Detect face + expressions (no landmarks needed = faster)
+      const detection = await faceapi
+        .detectSingleFace(videoElement, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
         .withFaceExpressions();
 
-      return detections;
-    } catch (error) {
-      console.error('Face detection error:', error);
-      return null;
-    }
-  }
+      if (!detection) return null;
 
-  drawDetections(canvas, detections) {
-    if (!canvas || !detections || detections.length === 0) {
-      return;
-    }
-
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    detections.forEach((detection, index) => {
-      const { box } = detection.detection;
       const expressions = detection.expressions;
 
-      // Draw face bounding box
-      ctx.strokeStyle = '#00ff00';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(box.x, box.y, box.width, box.height);
-
-      // Find dominant expression
-      const dominantExpression = Object.keys(expressions).reduce((a, b) => 
+      // Find the dominant expression
+      const dominantKey = Object.keys(expressions).reduce((a, b) =>
         expressions[a] > expressions[b] ? a : b
       );
-      const confidence = expressions[dominantExpression];
 
-      // Draw expression label
-      const labelY = box.y - 10;
-      const labelText = `${dominantExpression.toUpperCase()} (${Math.round(confidence * 100)}%)`;
-      
-      // Background for text
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-      const textWidth = ctx.measureText(labelText).width;
-      ctx.fillRect(box.x, labelY - 25, textWidth + 10, 30);
-      
-      // Text
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 16px Arial';
-      ctx.fillText(labelText, box.x + 5, labelY - 5);
+      const confidence = expressions[dominantKey];
+      const emotion = EXPRESSION_MAP[dominantKey] || 'neutral';
 
-      // Draw landmarks (optional)
-      if (detection.landmarks) {
-        ctx.fillStyle = '#ff0000';
-        detection.landmarks.positions.forEach(point => {
-          ctx.beginPath();
-          ctx.arc(point.x, point.y, 1, 0, 2 * Math.PI);
-          ctx.fill();
-        });
+      // Draw on canvas if provided
+      if (canvasElement) {
+        canvasElement.width = videoElement.videoWidth;
+        canvasElement.height = videoElement.videoHeight;
+        const ctx = canvasElement.getContext('2d');
+        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+        const { box } = detection.detection;
+        // Draw face box
+        ctx.strokeStyle = 'rgba(0, 200, 255, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(box.x, box.y, box.width, box.height);
       }
-    });
-  }
 
-  getBestExpression(detections) {
-    if (!detections || detections.length === 0) {
+      return {
+        emotion,
+        confidence,
+        allScores: Object.fromEntries(
+          Object.entries(expressions).map(([k, v]) => [EXPRESSION_MAP[k] || k, v])
+        ),
+        timestamp: new Date(),
+      };
+    } catch (error) {
+      // Non-critical — just skip this frame
       return null;
     }
-
-    // Get the first (usually largest) face detection
-    const detection = detections[0];
-    const expressions = detection.expressions;
-
-    // Find dominant expression
-    const dominantExpression = Object.keys(expressions).reduce((a, b) => 
-      expressions[a] > expressions[b] ? a : b
-    );
-
-    return {
-      emotion: dominantExpression,
-      confidence: expressions[dominantExpression],
-      allExpressions: expressions,
-      faceBox: detection.detection.box,
-      timestamp: new Date()
-    };
   }
 
   dispose() {
     this.isInitialized = false;
-    // face-api.js doesn't require explicit disposal
+    this.isLoading = false;
   }
 }
 
