@@ -537,21 +537,8 @@ const EmotionDetectionPage = () => {
                       />
                       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none transform scale-x-[-1]" />
 
-                      {/* Loading/Status Overlays */}
-                      {!modelReady && !currentEmotionState && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-20">
-                          <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
-                          <p className="text-white font-bold tracking-wide drop-shadow-lg">Initializing Neural Engine...</p>
-                          <p className="text-white/70 text-[10px] mt-2 bg-black/40 px-3 py-1 rounded-full">Connecting to AI models (may take 10-20s)</p>
-
-                          <button
-                            onClick={initializeEmotionDetector}
-                            className="mt-6 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-xs font-bold transition-all"
-                          >
-                            Retry AI Loading
-                          </button>
-                        </div>
-                      )}
+                
+                      
 
                       {/* Tech Overlay Elements */}
                       <div className="absolute inset-0 pointer-events-none">
