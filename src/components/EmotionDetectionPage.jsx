@@ -1,432 +1,749 @@
-import * as tf from '@tensorflow/tfjs';
-import '@tensorflow/tfjs-backend-webgl';
-import '@tensorflow/tfjs-backend-cpu';
+// EmotionDetectionPage.jsx (FINAL VERSION: Automatic Start & Universal Redirect)
 
-class EmotionDetector {
-  constructor() {
-    this.model = null;
-    this.isInitialized = false;
-    this.emotions = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'];
-    this.modelUrl = 'https://raw.githubusercontent.com/oarriaga/face_classification/master/trained_models/emotion_models/fer2013_mini_XCEPTION.102-0.66.hdf5';
-  }
+import { useEffect, useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+    Camera, Smile, Frown, Meh, AlertCircle, Navigation, CameraOff,
+    Brain, Zap, X, GraduationCap, Briefcase, Heart, Activity,
+    Sprout, Wallet, History, Settings, ChevronRight, Phone, Volume2, Mic, MicOff,
+    Sparkles, Smartphone, Coffee, Music, Sun, Moon, LogOut, Ticket,
+    LayoutDashboard
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useApp } from '../context/AppContext.jsx';
+import { useCredits } from '../context/CreditContext.jsx';
+import MediaPipeEmotionDetector from '../utils/mediapipeDetection.js';
 
-  async initialize() {
-    try {
-      console.log('Initializing TensorFlow.js...');
+const EmotionDetectionPage = () => {
+    const navigate = useNavigate();
+    const { user, setCurrentEmotion, addEmotionData, theme, toggleTheme, logout } = useApp();
+    const { credits } = useCredits();
 
-      // Set backend preference
-      await tf.setBackend('webgl');
-      await tf.ready();
+    // State for the batching and popup logic
 
-      console.log('TensorFlow.js backend:', tf.getBackend());
-      console.log('Loading emotion recognition model...');
+    const [emotionReadings, setEmotionReadings] = useState([]);
+    const [dominantEmotion, setDominantEmotion] = useState(null);
+    const [showEmotionPopup, setShowEmotionPopup] = useState(false);
+    const [showCalmingTips, setShowCalmingTips] = useState(false); // Kept in case you want to use it later
+    const READINGS_BATCH_SIZE = 10;
 
-      // Create a more sophisticated emotion detection model
-      this.model = await this.createEmotionModel();
+    // State for the component's operation
+    const [isDetecting, setIsDetecting] = useState(false);
+    const [currentEmotionState, setCurrentEmotionState] = useState(null);
+    const [detectionHistory, setDetectionHistory] = useState([]);
+    const [hasPermission, setHasPermission] = useState(null);
+    const [stream, setStream] = useState(null);
+    const [isModelLoading, setIsModelLoading] = useState(false);
+    const [modelReady, setModelReady] = useState(false);
+    const [detectionError, setDetectionError] = useState(null);
+    const [scanProgress, setScanProgress] = useState(0);
+    const [debugLogs, setDebugLogs] = useState([]);
 
-      this.isInitialized = true;
-      console.log('Emotion detector initialized successfully');
+    const addLog = (msg) => {
+        console.log(`[SYS] ${msg}`);
+        setDebugLogs(prev => [msg, ...prev.slice(0, 4)]);
+    };
 
-      return true;
-    } catch (error) {
-      console.error('Failed to initialize emotion detector:', error);
-      // Fallback to CPU backend
-      try {
-        await tf.setBackend('cpu');
-        await tf.ready();
-        this.model = await this.createEmotionModel();
-        this.isInitialized = true;
-        console.log('Emotion detector initialized with CPU backend');
-        return true;
-      } catch (cpuError) {
-        console.error('Failed to initialize with CPU backend:', cpuError);
-        return false;
-      }
-    }
-  }
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+    const emotionDetectorRef = useRef(null);
+    const detectionIntervalRef = useRef(null);
 
-  async createEmotionModel() {
-    // Create a more realistic CNN model for emotion recognition
-    const model = tf.sequential({
-      layers: [
-        // First convolutional block
-        tf.layers.conv2d({
-          inputShape: [48, 48, 1],
-          filters: 64,
-          kernelSize: 3,
-          activation: 'relu',
-          padding: 'same'
-        }),
-        tf.layers.batchNormalization(),
-        tf.layers.conv2d({
-          filters: 64,
-          kernelSize: 3,
-          activation: 'relu',
-          padding: 'same'
-        }),
-        tf.layers.maxPooling2d({ poolSize: 2, strides: 2 }),
-        tf.layers.dropout({ rate: 0.25 }),
+    // --- UPDATED POPUP MESSAGES ---
+    // Each question is now an invitation to a therapy session.
+    const emotionDataMap = {
+        neutral: { icon: '😐', color: 'from-gray-400 to-gray-600', component: Meh, question: "You seem to be feeling neutral. Would you like to start a session to check in?" },
+        happy: { icon: '😊', color: 'from-green-400 to-green-600', component: Smile, question: "You look happy! Would you like to talk about what's bringing you joy?" },
+        sad: { icon: '😢', color: 'from-blue-400 to-blue-600', component: Frown, question: "You seem sad. Would you like to talk about what you're feeling?" },
+        angry: { icon: '😠', color: 'from-red-400 to-red-600', component: AlertCircle, question: "You seem upset. Would you like a safe space to talk it through?" },
+        surprised: { icon: '😲', color: 'from-yellow-400 to-yellow-600', component: AlertCircle, question: "You seem surprised. Would you like to explore this feeling?" },
+        fear: { icon: '😨', color: 'from-purple-400 to-purple-600', component: AlertCircle, question: "You seem to be feeling fearful. Would you like a safe space to talk?" },
+        disgust: { icon: '🤢', color: 'from-green-400 to-green-600', component: AlertCircle, question: "You seem to be feeling disgust. Would you like to discuss it?" },
+    };
 
-        // Second convolutional block
-        tf.layers.conv2d({
-          filters: 128,
-          kernelSize: 3,
-          activation: 'relu',
-          padding: 'same'
-        }),
-        tf.layers.batchNormalization(),
-        tf.layers.conv2d({
-          filters: 128,
-          kernelSize: 3,
-          activation: 'relu',
-          padding: 'same'
-        }),
-        tf.layers.maxPooling2d({ poolSize: 2, strides: 2 }),
-        tf.layers.dropout({ rate: 0.25 }),
+    const initializeEmotionDetector = async () => {
+        if (emotionDetectorRef.current && modelReady) return;
+        setIsModelLoading(true);
+        setDetectionError(null);
+        addLog('Starting AI Neural Engine...');
 
-        // Third convolutional block
-        tf.layers.conv2d({
-          filters: 256,
-          kernelSize: 3,
-          activation: 'relu',
-          padding: 'same'
-        }),
-        tf.layers.batchNormalization(),
-        tf.layers.conv2d({
-          filters: 256,
-          kernelSize: 3,
-          activation: 'relu',
-          padding: 'same'
-        }),
-        tf.layers.maxPooling2d({ poolSize: 2, strides: 2 }),
-        tf.layers.dropout({ rate: 0.25 }),
+        try {
+            // Create a timeout to prevent hanging forever if the models download slowly
+            const initPromise = (async () => {
+                emotionDetectorRef.current = new MediaPipeEmotionDetector();
+                return await emotionDetectorRef.current.initialize();
+            })();
 
-        // Dense layers
-        tf.layers.flatten(),
-        tf.layers.dense({
-          units: 512,
-          activation: 'relu'
-        }),
-        tf.layers.dropout({ rate: 0.5 }),
-        tf.layers.dense({
-          units: 256,
-          activation: 'relu'
-        }),
-        tf.layers.dropout({ rate: 0.5 }),
-        tf.layers.dense({
-          units: 7, // 7 emotions
-          activation: 'softmax'
-        })
-      ]
-    });
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('AI Engine taking too long to load (Slow Connection)')), 15000)
+            );
 
-    // Compile the model
-    model.compile({
-      optimizer: tf.train.adam(0.001),
-      loss: 'categoricalCrossentropy',
-      metrics: ['accuracy']
-    });
+            const success = await Promise.race([initPromise, timeoutPromise]);
 
-    // Initialize with better weights using Xavier initialization
-    const weights = [];
-    for (let layer of model.layers) {
-      if (layer.getWeights().length > 0) {
-        const layerWeights = layer.getWeights().map(weight => {
-          const shape = weight.shape;
-          const fanIn = shape.length > 1 ? shape[shape.length - 2] : shape[0];
-          const fanOut = shape[shape.length - 1];
-          const limit = Math.sqrt(6.0 / (fanIn + fanOut));
-          return tf.randomUniform(shape, -limit, limit);
-        });
-        weights.push(...layerWeights);
-      }
-    }
-
-    return model;
-  }
-
-  async detectFaces(videoElement) {
-    return new Promise((resolve) => {
-      // Use a more robust face detection approach
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-
-      canvas.width = videoElement.videoWidth;
-      canvas.height = videoElement.videoHeight;
-
-      ctx.drawImage(videoElement, 0, 0);
-
-      // Simple face detection using Viola-Jones-like approach
-      // In a real implementation, you'd use opencv.js or face-api.js
-      const faces = this.detectFacesSimple(canvas);
-      resolve(faces);
-    });
-  }
-
-  detectFacesSimple(canvas) {
-    const ctx = canvas.getContext('2d');
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-
-    // Simple face detection based on skin color and facial features
-    const faces = [];
-    const width = canvas.width;
-    const height = canvas.height;
-
-    // Scan for face-like regions
-    for (let y = 0; y < height - 100; y += 20) {
-      for (let x = 0; x < width - 100; x += 20) {
-        const faceScore = this.calculateFaceScore(data, x, y, width, height);
-
-        if (faceScore > 0.3) {
-          // Estimate face bounds
-          const faceWidth = Math.min(150, width - x);
-          const faceHeight = Math.min(150, height - y);
-
-          faces.push({
-            x: x,
-            y: y,
-            width: faceWidth,
-            height: faceHeight,
-            confidence: faceScore
-          });
-
-          // Only detect one face for simplicity
-          break;
+            if (success) {
+                addLog('AI Engine READY');
+                setModelReady(true);
+            } else {
+                throw new Error('AI Engine failed to start. Try refreshing.');
+            }
+        } catch (error) {
+            addLog(`AI Init Failed: ${error.message}`);
+            setDetectionError(`Neural engine error: ${error.message}`);
+        } finally {
+            setIsModelLoading(false);
         }
-      }
-      if (faces.length > 0) break;
-    }
+    };
 
-    // If no faces detected using simple method, assume center face
-    if (faces.length === 0) {
-      const centerX = Math.max(0, (width - 150) / 2);
-      const centerY = Math.max(0, (height - 150) / 2);
-      faces.push({
-        x: centerX,
-        y: centerY,
-        width: Math.min(150, width),
-        height: Math.min(150, height),
-        confidence: 0.5
-      });
-    }
+    const requestCameraPermission = async () => {
+        try {
+            addLog('Requesting camera access...');
+            const mediaStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: 'user'
+                }
+            });
 
-    return faces;
-  }
+            addLog('Camera access GRANTED');
+            setStream(mediaStream);
+            setHasPermission(true);
 
-  calculateFaceScore(data, x, y, width, height) {
-    let skinPixels = 0;
-    let totalPixels = 0;
-
-    // Sample pixels in the region
-    for (let dy = 0; dy < 100 && y + dy < height; dy += 5) {
-      for (let dx = 0; dx < 100 && x + dx < width; dx += 5) {
-        const idx = ((y + dy) * width + (x + dx)) * 4;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
-
-        // Simple skin color detection
-        if (this.isSkinColor(r, g, b)) {
-          skinPixels++;
+            setStream(mediaStream);
+            setHasPermission(true);
+            addLog('Camera state updated');
+        } catch (error) {
+            addLog(`Camera Error: ${error.name}`);
+            setHasPermission(false);
+            setDetectionError(`Camera Blocked: ${error.message}. Please click the lock icon next to the URL bar and allow 'Camera'.`);
         }
-        totalPixels++;
-      }
-    }
+    };
 
-    return totalPixels > 0 ? skinPixels / totalPixels : 0;
-  }
+    const analyzeReadings = (readings) => {
+        setIsDetecting(false);
+        if (!readings.length) return;
+        const emotionCounts = readings.reduce((acc, emotion) => ({ ...acc, [emotion]: (acc[emotion] || 0) + 1 }), {});
+        const dominant = Object.keys(emotionCounts).reduce((a, b) => emotionCounts[a] > emotionCounts[b] ? a : b);
+        setDominantEmotion(dominant);
+        setShowEmotionPopup(true);
+    };
 
-  isSkinColor(r, g, b) {
-    // Simple skin color detection
-    return (r > 95 && g > 40 && b > 20 &&
-      Math.max(r, g, b) - Math.min(r, g, b) > 15 &&
-      Math.abs(r - g) > 15 && r > g && r > b);
-  }
+    const performEmotionDetection = async () => {
+        if (!emotionDetectorRef.current || !modelReady || !videoRef.current || !canvasRef.current) return;
 
-  preprocessFace(canvas, face) {
-    // Extract and preprocess face region
-    const faceCanvas = document.createElement('canvas');
-    faceCanvas.width = 48;
-    faceCanvas.height = 48;
-    const faceCtx = faceCanvas.getContext('2d');
+        // Log if video isn't ready yet
+        if (videoRef.current.videoWidth === 0) {
+            console.log('Waiting for video frames...');
+            return;
+        }
 
-    // Draw face region
-    faceCtx.drawImage(
-      canvas,
-      face.x, face.y, face.width, face.height,
-      0, 0, 48, 48
+        try {
+            const result = await emotionDetectorRef.current.detectEmotionFromVideo(videoRef.current, canvasRef.current);
+            if (result) {
+                const emotionData = {
+                    id: Date.now().toString(), emotion: result.emotion, confidence: result.confidence,
+                    timestamp: result.timestamp, allScores: result.allScores,
+                };
+                setCurrentEmotionState(emotionData);
+                setCurrentEmotion(emotionData);
+                addEmotionData(emotionData);
+                setDetectionHistory(prev => [emotionData, ...prev.slice(0, 4)]);
+                setEmotionReadings(prev => {
+                    const newReadings = [...prev, result.emotion];
+                    setScanProgress((newReadings.length / READINGS_BATCH_SIZE) * 100);
+                    if (newReadings.length >= READINGS_BATCH_SIZE) {
+                        analyzeReadings(newReadings);
+                        setTimeout(() => setScanProgress(0), 500); // Small delay before reset for visual effect
+                        return [];
+                    }
+                    return newReadings;
+                });
+            }
+        } catch (error) {
+            console.error('MediaPipe emotion detection error:', error);
+            // Don't show error immediately as it might be transient
+        }
+    };
+
+    const handlePopupDismiss = () => {
+        setShowEmotionPopup(false);
+        navigate('/therapy-session', { state: { category: 'Just Talk', initialEmotion: dominantEmotion } });
+    };
+
+    const retryCamera = () => {
+        setDetectionError(null);
+        setHasPermission(null);
+        requestCameraPermission();
+    };
+
+    const handleCloseTips = () => {
+        setShowCalmingTips(false);
+        setIsDetecting(true);
+        setDominantEmotion(null);
+    };
+
+    const categories = [
+        {
+            id: 'academic',
+            title: 'Academic / Exam',
+            desc: 'Beat exam stress & boost focus',
+            icon: GraduationCap,
+            color: 'from-blue-500 to-indigo-600',
+            glow: 'shadow-blue-500/20'
+        },
+        {
+            id: 'career',
+            title: 'Career & Jobs',
+            desc: 'Navigate your professional path',
+            icon: Briefcase,
+            color: 'from-emerald-500 to-teal-600',
+            glow: 'shadow-emerald-500/20'
+        },
+        {
+            id: 'relationship',
+            title: 'Relationship',
+            desc: 'Healing heart & family bonds',
+            icon: Heart,
+            color: 'from-rose-500 to-pink-600',
+            glow: 'shadow-rose-500/20'
+        },
+        {
+            id: 'health',
+            title: 'Health & Wellness',
+            desc: 'Revitalize your body & mind',
+            icon: Activity,
+            color: 'from-orange-500 to-red-600',
+            glow: 'shadow-orange-500/20'
+        },
+        {
+            id: 'growth',
+            title: 'Personal Growth',
+            desc: 'Level up your best version',
+            icon: Sprout,
+            color: 'from-lime-500 to-green-600',
+            glow: 'shadow-lime-500/20'
+        },
+        {
+            id: 'mental',
+            title: 'Mental Health',
+            desc: 'Safe space for inner peace',
+            icon: Brain,
+            color: 'from-purple-500 to-violet-600',
+            glow: 'shadow-purple-500/20'
+        },
+        {
+            id: 'financial',
+            title: 'Financial Stress',
+            desc: 'Practical calm for money worries',
+            icon: Wallet,
+            color: 'from-amber-500 to-yellow-600',
+            glow: 'shadow-amber-500/20'
+        },
+    ];
+
+    const handleCategorySelect = (category) => {
+        setShowEmotionPopup(false);
+        navigate('/therapy-session', { state: { category: category.title, initialEmotion: dominantEmotion } });
+    };
+
+    // --- REACT LIFECYCLE HOOKS ---
+    useEffect(() => {
+        if (!user) navigate('/login');
+        else if (hasPermission === null && !isModelLoading) {
+            requestCameraPermission();
+        }
+        return () => {
+            if (stream) {
+                stream.getTracks().forEach(track => {
+                    track.stop();
+                    addLog(`Stopped track: ${track.kind}`);
+                });
+            }
+            if (emotionDetectorRef.current) emotionDetectorRef.current.dispose();
+            if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
+        };
+    }, [user, hasPermission, navigate]);
+
+    // Dedicated effect to attach stream once video element is rendered
+    useEffect(() => {
+        if (hasPermission && stream && videoRef.current) {
+            if (videoRef.current.srcObject !== stream) {
+                addLog('Attaching stream to video element...');
+                videoRef.current.srcObject = stream;
+
+                const handleVideoReady = () => {
+                    if (videoRef.current && videoRef.current.videoWidth > 0) {
+                        addLog(`Video ready: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`);
+                        initializeEmotionDetector();
+                    }
+                };
+
+                videoRef.current.onloadedmetadata = handleVideoReady;
+                videoRef.current.onloadeddata = handleVideoReady;
+
+                // Aggressive play attempt
+                videoRef.current.play().catch(e => addLog(`Play error: ${e.message}`));
+
+                // Direct fallback check
+                const checkInterval = setInterval(() => {
+                    if (videoRef.current && videoRef.current.videoWidth > 0) {
+                        handleVideoReady();
+                        clearInterval(checkInterval);
+                    }
+                }, 500);
+
+                return () => clearInterval(checkInterval);
+            }
+        }
+    }, [hasPermission, stream, videoRef.current]);
+
+    // --- UPDATED useEffect FOR AUTOMATIC DETECTION ---
+    useEffect(() => {
+        // Automatically start detecting when ready
+        if (hasPermission && modelReady && !isDetecting && !showEmotionPopup && !showCalmingTips) {
+            setIsDetecting(true);
+        }
+
+        // Manage the interval timer
+        if (isDetecting) {
+            detectionIntervalRef.current = setInterval(performEmotionDetection, 1000);
+        } else {
+            if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
+        }
+
+        return () => {
+            if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
+        };
+    }, [isDetecting, hasPermission, modelReady, showEmotionPopup, showCalmingTips]);
+
+    const EmotionIconComponent = currentEmotionState ? emotionDataMap[currentEmotionState.emotion].component : Camera;
+
+    return (
+        <div
+            className="min-h-screen p-6 relative overflow-hidden"
+            style={{
+                background: theme === 'dark'
+                    ? 'linear-gradient(135deg, #0a0f1a 0%, #0f172a 50%, #0a0f1a 100%)'
+                    : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%)'
+            }}
+        >
+            <div className="absolute inset-0">
+                {[...Array(10)].map((_, i) => (
+                    <motion.div key={i} className="absolute rounded-full bg-gradient-to-r from-blue-500/10 to-teal-500/10 blur-xl"
+                        style={{ width: `${Math.random() * 200 + 100}px`, height: `${Math.random() * 200 + 100}px`, left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
+                        animate={{ x: [0, 30, -30, 0], y: [0, -30, 30, 0], scale: [1, 1.2, 0.8, 1] }}
+                        transition={{ duration: Math.random() * 10 + 10, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                ))}
+            </div>
+
+            <AnimatePresence>
+                {showEmotionPopup && dominantEmotion && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/80 backdrop-blur-xl flex items-center justify-center z-50 p-6"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 20 }}
+                            className={`border rounded-[2.5rem] p-8 md:p-12 shadow-2xl max-w-5xl w-full backdrop-blur-2xl overflow-hidden relative flex flex-col max-h-[90vh] ${theme === 'dark'
+                                ? 'bg-[#0f172a]/90 border-white/10'
+                                : 'bg-white/95 border-slate-200 shadow-xl'
+                                }`}
+                        >
+                            <div className="flex flex-col items-center text-center mb-8 relative z-10">
+                                <button
+                                    onClick={handlePopupDismiss}
+                                    className={`absolute right-0 top-0 p-3 rounded-full transition-all group border ${theme === 'dark'
+                                        ? 'bg-white/5 hover:bg-white/10 text-gray-400 border-white/10'
+                                        : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border-slate-200'
+                                        }`}
+                                >
+                                    <X className="w-6 h-6 group-hover:rotate-90 transition-transform" />
+                                </button>
+
+                                <h2 className={`text-4xl md:text-5xl font-black mb-6 tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                                    How can I help you today?
+                                </h2>
+
+                                <div className={`flex items-center gap-4 py-3 px-8 rounded-full border backdrop-blur-md ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-white/80 border-slate-200 shadow-sm'
+                                    }`}>
+                                    <span className="text-3xl animate-bounce">{emotionDataMap[dominantEmotion].icon}</span>
+                                    <div className="flex flex-col items-start">
+                                        <span className={`text-xs uppercase tracking-widest font-bold ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Detected Emotion</span>
+                                        <span className={`text-lg font-bold capitalize ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                                            {dominantEmotion}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10 mt-6 max-h-[55vh] overflow-y-auto custom-scrollbar pr-2 pb-2">
+                                {categories.map((cat, index) => (
+                                    <motion.button
+                                        key={cat.id}
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: index * 0.05 }}
+                                        whileHover={{ scale: 1.02, y: -2 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => handleCategorySelect(cat)}
+                                        className={`relative group overflow-hidden rounded-3xl border p-1 text-left transition-all duration-300 ${theme === 'dark'
+                                            ? 'bg-gradient-to-br from-white/5 to-white/0 border-white/10 hover:border-white/20'
+                                            : 'bg-white border-slate-100 hover:border-blue-200 shadow-sm hover:shadow-lg'
+                                            }`}
+                                    >
+                                        {/* Inner Content Container */}
+                                        <div className={`relative z-10 flex items-center p-4 rounded-[1.3rem] h-full transition-colors ${theme === 'dark' ? 'bg-[#0f172a]/40 group-hover:bg-[#0f172a]/20' : 'bg-slate-50/50 group-hover:bg-white'
+                                            }`}>
+                                            {/* Icon Box */}
+                                            <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${cat.color} flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500`}>
+                                                <cat.icon className="w-7 h-7 text-white" />
+                                            </div>
+
+                                            {/* Text */}
+                                            <div className="ml-4 flex-1 min-w-0">
+                                                <h3 className={`text-lg font-bold mb-0.5 truncate ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                                                    {cat.title}
+                                                </h3>
+                                                <p className={`text-xs font-medium truncate ${theme === 'dark' ? 'text-slate-400 group-hover:text-white' : 'text-slate-500 group-hover:text-blue-600'} transition-colors`}>
+                                                    {cat.desc}
+                                                </p>
+                                            </div>
+
+                                            {/* Arrow */}
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 ${theme === 'dark' ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-500'
+                                                }`}>
+                                                <Navigation className="w-4 h-4" />
+                                            </div>
+                                        </div>
+
+                                        {/* Background Gradient/Glow on Hover */}
+                                        <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-500 bg-gradient-to-r ${cat.color}`} />
+
+                                        {/* Decorative Corner */}
+                                        <div className={`absolute -bottom-4 -right-4 w-16 h-16 rounded-full blur-xl opacity-0 group-hover:opacity-30 transition-opacity duration-500 bg-gradient-to-br ${cat.color}`} />
+                                    </motion.button>
+                                ))}
+                            </div>
+
+                            <div className="mt-16 flex justify-center relative z-10">
+                                <button
+                                    onClick={handlePopupDismiss}
+                                    className="group flex items-center gap-4 text-gray-400 hover:text-white transition-all text-lg font-bold tracking-wide"
+                                >
+                                    <span className="w-12 h-[2px] bg-gray-700 group-hover:w-20 group-hover:bg-blue-400 transition-all duration-300" />
+                                    No specific path, just talk
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <header className={`fixed top-0 left-0 right-0 z-50 backdrop-blur-xl border-b transition-all duration-300 ${theme === 'dark'
+                ? 'bg-[#0a0f1a]/80 border-white/10'
+                : 'bg-white/80 border-slate-200 shadow-sm'
+                }`}>
+                <div className="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between">
+                    {/* Header Title moved for better responsiveness */}
+                    <div className="flex flex-col mb-2">
+                        <h1 className="text-3xl font-black bg-gradient-to-r from-blue-400 via-teal-400 to-green-400 bg-clip-text text-transparent">
+                            Emotion Detection
+                        </h1>
+                        <p className={`text-xs font-medium ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                            Instant AI facial analysis
+                        </p>
+                    </div>
+
+                    <div className="flex space-x-3">
+                        {/* Buy Credits */}
+                        <button
+                            onClick={() => navigate('/buy-credits')}
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-full transition-all duration-300 font-bold text-sm border ${theme === 'dark'
+                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20'
+                                : 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 shadow-sm'
+                                }`}
+                        >
+                            <Ticket className="w-4 h-4" />
+                            <span>{credits}</span>
+                        </button>
+
+                        {/* Theme Toggle */}
+                        <button
+                            onClick={toggleTheme}
+                            className={`p-2.5 rounded-full border transition-all duration-300 ${theme === 'dark'
+                                ? 'bg-white/10 text-white hover:bg-white/20 border-white/10'
+                                : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200 shadow-sm'
+                                }`}
+                        >
+                            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                        </button>
+
+                        {/* Logout */}
+                        <button
+                            onClick={logout}
+                            className={`p-2.5 rounded-full border transition-all duration-300 ${theme === 'dark'
+                                ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20'
+                                : 'bg-white border-slate-200 text-rose-500 hover:bg-rose-50 shadow-sm'
+                                }`}
+                        >
+                            <LogOut className="w-5 h-5" />
+                        </button>
+
+                        <div className="h-6 w-px bg-white/10 mx-1" />
+
+                        <button onClick={() => navigate('/dashboard')} className={`flex items-center px-5 py-2.5 rounded-full transition-all duration-300 font-bold text-sm border ${theme === 'dark'
+                            ? 'bg-white/10 text-white hover:bg-white/20 border-white/10'
+                            : 'bg-white text-slate-700 hover:text-blue-600 hover:bg-slate-50 border-slate-200 shadow-sm'
+                            }`}>
+                            <LayoutDashboard className="w-4 h-4 mr-2" />
+                            Dashboard
+                        </button>
+                        <button onClick={() => navigate('/mood-history')} className={`flex items-center px-5 py-2.5 rounded-full transition-all duration-300 font-bold text-sm border ${theme === 'dark'
+                            ? 'bg-white/10 text-white hover:bg-white/20 border-white/10'
+                            : 'bg-white text-slate-700 hover:text-blue-600 hover:bg-slate-50 border-slate-200 shadow-sm'
+                            }`}>
+                            <History className="w-4 h-4 mr-2" />
+                            History
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <main className="relative z-10 pt-32 px-6 pb-12">
+                <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-8">
+
+                    {/* Left Column: Camera Feed (Occupies larger space) */}
+                    <div className="lg:col-span-8 flex flex-col gap-6">
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full">
+                            {/* Error/Permission Banners */}
+                            {hasPermission === false && (
+                                <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex items-center gap-3 text-red-400 mb-4">
+                                    <CameraOff className="w-5 h-5" />
+                                    <p>Camera access denied. Please enable permissions.</p>
+                                </div>
+                            )}
+                            {detectionError && (
+                                <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex items-center gap-3 text-red-400 mb-4">
+                                    <AlertCircle className="w-5 h-5" />
+                                    <p>{detectionError}</p>
+                                </div>
+                            )}
+
+                            <div className={`backdrop-blur-xl rounded-[2.5rem] p-2 border shadow-2xl transition-all duration-500 relative overflow-hidden group ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-white/60 border-slate-200 shadow-slate-200/50'
+                                }`}>
+                                <div className="relative aspect-video rounded-[2rem] overflow-hidden bg-black">
+                                    {hasPermission ? (
+                                        <>
+                                            <motion.video
+                                                ref={videoRef}
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                transition={{ duration: 0.5 }}
+                                                className="w-full h-full object-cover transform scale-x-[-1]"
+                                                autoPlay
+                                                muted
+                                                playsInline
+                                                onLoadedMetadata={(e) => console.log('Video metadata loaded', e)}
+                                                onError={(e) => console.error('Video tag error', e)}
+                                            />
+                                            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none transform scale-x-[-1]" />
+
+                                            {/* AI STATUS OVERLAY (Non-blocking) */}
+                                            {!modelReady && (
+                                                <div className="absolute top-6 right-6 flex items-center gap-2 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 z-30">
+                                                    <div className="w-3 h-3 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+                                                    <span className="text-white/80 text-[10px] font-black tracking-[0.2em] uppercase">AI Preparing...</span>
+                                                </div>
+                                            )}
+
+                                            {/* Tech Overlay Elements */}
+                                            <div className="absolute inset-0 pointer-events-none">
+                                                <div className="absolute top-4 left-4 w-12 h-12 border-l-4 border-t-4 border-white/30 rounded-tl-xl" />
+                                                <div className="absolute top-4 right-4 w-12 h-12 border-r-4 border-t-4 border-white/30 rounded-tr-xl" />
+                                                <div className="absolute bottom-4 left-4 w-12 h-12 border-l-4 border-b-4 border-white/30 rounded-bl-xl" />
+                                                <div className="absolute bottom-4 right-4 w-12 h-12 border-r-4 border-b-4 border-white/30 rounded-br-xl" />
+
+                                                {isDetecting && (
+                                                    <>
+                                                        <div className="absolute top-6 left-6 flex items-center gap-2 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 z-30">
+                                                            <span className="relative flex h-2.5 w-2.5">
+                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
+                                                            </span>
+                                                            <span className="text-white/80 text-[10px] font-black tracking-[0.2em] uppercase">AI Scanning...</span>
+                                                        </div>
+
+                                                        {/* Scanning Line Animation */}
+                                                        <motion.div
+                                                            className="absolute left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-blue-500 to-transparent shadow-[0_0_15px_rgba(59,130,246,0.8)] z-20 pointer-events-none"
+                                                            animate={{ top: ['0%', '100%', '0%'] }}
+                                                            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                                                        />
+
+                                                        {/* Scan Progress Bar Overlay */}
+                                                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-48 h-1 bg-white/10 backdrop-blur-md rounded-full overflow-hidden border border-white/5 z-30">
+                                                            <motion.div
+                                                                className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.6)]"
+                                                                animate={{ width: `${scanProgress}%` }}
+                                                                transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                                                            />
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center h-full text-slate-500 p-12 text-center">
+                                            <div className="flex flex-col items-center max-w-sm">
+                                                <CameraOff className="w-16 h-16 mx-auto mb-6 opacity-30" />
+                                                <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Webcam Not Active</h3>
+                                                <p className="text-sm mb-8 opacity-60">Please allow camera access and ensure no other app is using it.</p>
+
+                                                <button
+                                                    onClick={retryCamera}
+                                                    className={`flex items-center gap-3 px-8 py-3.5 rounded-2xl font-bold transition-all active:scale-95 ${theme === 'dark'
+                                                        ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20'
+                                                        : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl'
+                                                        }`}
+                                                >
+                                                    <Camera className="w-5 h-5" />
+                                                    Enable Webcam
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Troubleshooting Tips */}
+                            <div className={`p-6 rounded-3xl border ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'}`}>
+                                <div className="flex items-center gap-3 mb-3">
+                                    <AlertCircle className="w-4 h-4 text-blue-400" />
+                                    <h4 className={`text-xs font-black uppercase tracking-[0.15em] ${theme === 'dark' ? 'text-white/70' : 'text-slate-800'}`}>Troubleshooting Black Screen</h4>
+                                </div>
+                                <ul className={`text-[11px] space-y-2 font-medium ${theme === 'dark' ? 'text-slate-500' : 'text-slate-500'}`}>
+                                    <li>• Ensure the browser has <b>Camera Permissions</b> enabled (check the address bar lock icon).</li>
+                                    <li>• Close other apps using the camera (Zoom, Teams, WhatsApp Web).</li>
+                                    <li>• Use <b>Google Chrome</b> or <b>Edge</b> for the best stability.</li>
+                                    <li>• Try <b>Refreshing (F5)</b> if the "Initializing" spinner stays forever.</li>
+                                </ul>
+                            </div>
+                        </motion.div>
+                    </div>
+
+                    {/* Right Column: Stats & Analysis */}
+                    <div className="lg:col-span-4 flex flex-col gap-6">
+
+                        {/* Current Emotion Card */}
+                        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
+                            <div className={`backdrop-blur-xl rounded-[2.5rem] p-8 border shadow-xl relative overflow-hidden ${theme === 'dark' ? 'bg-gradient-to-br from-white/10 to-white/5 border-white/10' : 'bg-white border-slate-200'
+                                }`}>
+                                <h3 className={`text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                                    <Brain className="w-4 h-4" /> Real-time Insight
+                                </h3>
+
+                                <div className="flex flex-col items-center justify-center py-4">
+                                    <AnimatePresence mode="wait">
+                                        {currentEmotionState ? (
+                                            <motion.div
+                                                key={currentEmotionState.timestamp}
+                                                initial={{ scale: 0.8, opacity: 0 }}
+                                                animate={{ scale: 1, opacity: 1 }}
+                                                exit={{ scale: 0.8, opacity: 0 }}
+                                                className="flex flex-col items-center w-full"
+                                            >
+                                                <div className={`w-28 h-28 rounded-3xl flex items-center justify-center text-7xl mb-6 shadow-2xl bg-gradient-to-br ${emotionDataMap[currentEmotionState.emotion].color}`}>
+                                                    {emotionDataMap[currentEmotionState.emotion].icon}
+                                                </div>
+                                                <h2 className={`text-4xl font-black capitalize mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                                                    {currentEmotionState.emotion}
+                                                </h2>
+
+                                                <div className="w-full mt-4 bg-gray-200/20 rounded-full h-2 overflow-hidden">
+                                                    <motion.div
+                                                        initial={{ width: 0 }}
+                                                        animate={{ width: `${currentEmotionState.confidence * 100}%` }}
+                                                        className={`h-full bg-gradient-to-r ${emotionDataMap[currentEmotionState.emotion].color}`}
+                                                    />
+                                                </div>
+                                                <div className="flex justify-between w-full mt-2 text-xs font-bold opacity-60">
+                                                    <span>Confidence</span>
+                                                    <span>{Math.round(currentEmotionState.confidence * 100)}%</span>
+                                                </div>
+                                            </motion.div>
+                                        ) : (
+                                            <div className="text-center py-8 opacity-50">
+                                                <Activity className="w-12 h-12 mx-auto mb-4" />
+                                                <p>Waiting for data...</p>
+                                            </div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+                            </div>
+                        </motion.div>
+
+                        {/* Recent History List */}
+                        <motion.div
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.4 }}
+                            className="flex-1"
+                        >
+                            <div className={`backdrop-blur-xl rounded-[2.5rem] p-6 border shadow-xl h-full flex flex-col ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-white/80 border-slate-200'
+                                }`}>
+                                <h3 className={`text-sm font-black uppercase tracking-widest mb-4 flex items-center gap-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                                    <Activity className="w-4 h-4" /> Recent Detections
+                                </h3>
+
+                                <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar max-h-[400px]">
+                                    {detectionHistory.length > 0 ? detectionHistory.map((emotion, index) => {
+                                        const IconComponent = emotionDataMap[emotion.emotion].component;
+                                        return (
+                                            <motion.div
+                                                key={emotion.id}
+                                                initial={{ opacity: 0, x: 10 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                transition={{ delay: index * 0.05 }}
+                                                className={`p-3 rounded-2xl flex items-center gap-4 border transition-all ${theme === 'dark'
+                                                    ? 'bg-white/5 border-white/5 hover:bg-white/10'
+                                                    : 'bg-slate-50 border-slate-100 hover:bg-slate-100'
+                                                    }`}
+                                            >
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br ${emotionDataMap[emotion.emotion].color}`}>
+                                                    <IconComponent className="w-5 h-5 text-white" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className={`font-bold capitalize truncate ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                                                        {emotion.emotion}
+                                                    </p>
+                                                    <p className="text-xs opacity-50 truncate">
+                                                        {emotion.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                                    </p>
+                                                </div>
+                                                <div className={`text-xs font-bold px-2 py-1 rounded-lg ${theme === 'dark' ? 'bg-white/10 text-white' : 'bg-white text-slate-600 shadow-sm border border-slate-100'
+                                                    }`}>
+                                                    {Math.round(emotion.confidence * 100)}%
+                                                </div>
+                                            </motion.div>
+                                        );
+                                    }) : (
+                                        <div className="flex flex-col items-center justify-center h-40 text-center opacity-40">
+                                            <p className="text-sm">Start detecting to see history</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                </div>
+            </main>
+        </div>
     );
+};
 
-    // Convert to grayscale and normalize
-    const imageData = faceCtx.getImageData(0, 0, 48, 48);
-    const grayscale = new Float32Array(48 * 48);
-
-    for (let i = 0; i < imageData.data.length; i += 4) {
-      const gray = (imageData.data[i] * 0.299 +
-        imageData.data[i + 1] * 0.587 +
-        imageData.data[i + 2] * 0.114) / 255.0;
-      grayscale[i / 4] = gray;
-    }
-
-    return tf.tensor4d(grayscale, [1, 48, 48, 1]);
-  }
-
-  async predictEmotion(faceImage) {
-    if (!this.model || !faceImage) {
-      return null;
-    }
-
-    try {
-      // Get prediction from model
-      const prediction = this.model.predict(faceImage);
-      const probabilities = await prediction.data();
-
-      // Clean up tensors
-      prediction.dispose();
-
-      // Find the emotion with highest probability
-      let maxIndex = 0;
-      let maxProb = probabilities[0];
-
-      for (let i = 1; i < probabilities.length; i++) {
-        if (probabilities[i] > maxProb) {
-          maxProb = probabilities[i];
-          maxIndex = i;
-        }
-      }
-
-      // Add some noise to make it more realistic
-      const confidence = Math.min(0.95, maxProb + Math.random() * 0.1);
-
-      return {
-        emotion: this.emotions[maxIndex],
-        confidence: confidence,
-        probabilities: Array.from(probabilities)
-      };
-    } catch (error) {
-      console.error('Emotion prediction error:', error);
-      return null;
-    }
-  }
-
-  drawFaceBox(canvas, face, emotion, confidence) {
-    const ctx = canvas.getContext('2d');
-
-    // Draw face bounding box
-    ctx.strokeStyle = '#00ff00';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(face.x, face.y, face.width, face.height);
-
-    // Draw emotion label background
-    const labelWidth = 200;
-    const labelHeight = 60;
-
-    // --- UN-MIRROR TRANSFORMATION ---
-    // The canvas is mirrored via CSS, so we flip the text/emoji back.
-    ctx.save();
-
-    // Calculate label position
-    const labelX = face.x;
-    const labelY = face.y - labelHeight;
-
-    // Move to the label's center, flip, then move back
-    ctx.translate(labelX + labelWidth / 2, labelY + labelHeight / 2);
-    ctx.scale(-1, 1);
-    ctx.translate(-(labelWidth / 2), -(labelHeight / 2));
-
-    // Draw background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-    ctx.fillRect(0, 0, labelWidth, labelHeight);
-
-    // Draw emotion text
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 16px Arial';
-    ctx.fillText(`${emotion.toUpperCase()}`, 5, 25);
-    ctx.fillText(`${Math.round(confidence * 100)}% confident`, 5, 45);
-
-    // Draw emotion emoji
-    ctx.font = '24px Arial';
-    const emojis = {
-      angry: '😠',
-      disgust: '🤢',
-      fear: '😨',
-      happy: '😊',
-      neutral: '😐',
-      sad: '😢',
-      surprise: '😲'
-    };
-    ctx.fillText(emojis[emotion] || '😐', labelWidth - 35, 35);
-
-    ctx.restore();
-
-    return {
-      x: face.x,
-      y: face.y,
-      width: face.width,
-      height: face.height
-    };
-  }
-
-  async detectEmotionFromVideo(videoElement, canvasElement) {
-    if (!this.isInitialized) {
-      console.warn('Emotion detector not initialized');
-      return null;
-    }
-
-    try {
-      // Set canvas size to match video
-      canvasElement.width = videoElement.videoWidth;
-      canvasElement.height = videoElement.videoHeight;
-
-      const ctx = canvasElement.getContext('2d');
-      ctx.drawImage(videoElement, 0, 0);
-
-      // Detect faces
-      const faces = await this.detectFaces(videoElement);
-
-      if (faces.length === 0) {
-        return null;
-      }
-
-      // Process the first detected face
-      const face = faces[0];
-
-      // Preprocess face for emotion recognition
-      const faceImage = this.preprocessFace(canvasElement, face);
-
-      // Predict emotion
-      const emotionResult = await this.predictEmotion(faceImage);
-
-      // Clean up tensor
-      faceImage.dispose();
-
-      if (!emotionResult) {
-        return null;
-      }
-
-      // Draw face box and emotion on canvas
-      const faceBox = this.drawFaceBox(canvasElement, face, emotionResult.emotion, emotionResult.confidence);
-
-      return {
-        emotion: emotionResult.emotion,
-        confidence: emotionResult.confidence,
-        probabilities: emotionResult.probabilities,
-        faceBox: faceBox,
-        timestamp: new Date()
-      };
-    } catch (error) {
-      console.error('Emotion detection error:', error);
-      return null;
-    }
-  }
-
-  dispose() {
-    if (this.model) {
-      this.model.dispose();
-    }
-    this.isInitialized = false;
-  }
-}
-
-export default EmotionDetector;
+export default EmotionDetectionPage;
