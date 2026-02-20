@@ -12,7 +12,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import { useCredits } from '../context/CreditContext.jsx';
-import AdvancedFaceDetector from '../utils/faceDetection.js';
+import MediaPipeEmotionDetector from '../utils/mediapipeDetection.js';
 
 const EmotionDetectionPage = () => {
   const navigate = useNavigate();
@@ -61,41 +61,29 @@ const EmotionDetectionPage = () => {
   };
 
   const initializeEmotionDetector = async () => {
-    // PREVENT DOUBLE LOADING (Fixes the buffer hang)
-    if (isModelLoading || modelReady) {
-      addLog(isModelLoading ? 'Already loading...' : 'AI Engine ready');
-      return;
-    }
-
+    if (emotionDetectorRef.current && modelReady) return;
     setIsModelLoading(true);
     setDetectionError(null);
     addLog('Starting AI Neural Engine...');
 
     try {
-      // If there's an old instance, clean it up before making a new one
-      if (emotionDetectorRef.current) {
-        try { emotionDetectorRef.current.dispose(); } catch (e) { }
-        emotionDetectorRef.current = null;
-      }
       // Create a timeout to prevent hanging forever if the models download slowly
       const initPromise = (async () => {
-        emotionDetectorRef.current = new AdvancedFaceDetector();
-        emotionDetectorRef.current.onLog = (msg) => addLog(msg);
+        emotionDetectorRef.current = new MediaPipeEmotionDetector();
         return await emotionDetectorRef.current.initialize();
       })();
 
-      // Create a timeout — 60 seconds to allow for slow connections & CDN fallback
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Models took too long. Check your internet connection.')), 60000)
+        setTimeout(() => reject(new Error('AI Engine taking too long to load (Slow Connection)')), 15000)
       );
 
       const success = await Promise.race([initPromise, timeoutPromise]);
 
       if (success) {
-        addLog('AI Engine READY ✅');
+        addLog('AI Engine READY');
         setModelReady(true);
       } else {
-        throw new Error('Models could not load. Check internet and try again.');
+        throw new Error('AI Engine failed to start. Try refreshing.');
       }
     } catch (error) {
       addLog(`AI Init Failed: ${error.message}`);
@@ -286,20 +274,9 @@ const EmotionDetectionPage = () => {
     if (!user) navigate('/login');
     else if (hasPermission === null) requestCameraPermission();
     return () => {
-      addLog('Leaving page, cleaning up resources...');
-      if (stream) {
-        stream.getTracks().forEach(track => {
-          track.stop();
-          addLog(`Camera track ${track.label} stopped`);
-        });
-      }
-      if (emotionDetectorRef.current) {
-        emotionDetectorRef.current.dispose();
-        emotionDetectorRef.current = null;
-      }
+      if (stream) stream.getTracks().forEach(track => track.stop());
+      if (emotionDetectorRef.current) emotionDetectorRef.current.dispose();
       if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
-      setModelReady(false);
-      setIsModelLoading(false);
     };
   }, [user, hasPermission, stream, navigate]);
 
@@ -556,6 +533,22 @@ const EmotionDetectionPage = () => {
                       />
                       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none transform scale-x-[-1]" />
 
+                      {/* Loading/Status Overlays */}
+                      {!modelReady && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-20">
+                          <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
+                          <p className="text-white font-bold tracking-wide drop-shadow-lg">Initializing Neural Engine...</p>
+                          <p className="text-white/70 text-[10px] mt-2 bg-black/40 px-3 py-1 rounded-full">Connecting to AI models (may take 10-20s)</p>
+
+                          <button
+                            onClick={initializeEmotionDetector}
+                            className="mt-6 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-xs font-bold transition-all"
+                          >
+                            Retry AI Loading
+                          </button>
+                        </div>
+                      )}
+
                       {/* Tech Overlay Elements */}
                       <div className="absolute inset-0 pointer-events-none">
                         <div className="absolute top-4 left-4 w-12 h-12 border-l-4 border-t-4 border-white/30 rounded-tl-xl" />
@@ -576,22 +569,31 @@ const EmotionDetectionPage = () => {
                     </>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full text-slate-500 p-12 text-center">
-                      <div className="flex flex-col items-center max-w-sm">
-                        <CameraOff className="w-16 h-16 mx-auto mb-6 opacity-30" />
-                        <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Webcam Not Active</h3>
-                        <p className="text-sm mb-8 opacity-60">Please allow camera access and ensure no other app is using it.</p>
+                      {isModelLoading ? (
+                        <div className="flex flex-col items-center gap-4">
+                          <div className="relative w-16 h-16">
+                            <div className="absolute inset-0 border-t-4 border-blue-500 rounded-full animate-spin"></div>
+                          </div>
+                          <p className="font-medium animate-pulse">Initializing Neural Engine...</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center max-w-sm">
+                          <CameraOff className="w-16 h-16 mx-auto mb-6 opacity-30" />
+                          <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Webcam Not Active</h3>
+                          <p className="text-sm mb-8 opacity-60">Please allow camera access and ensure no other app is using it.</p>
 
-                        <button
-                          onClick={retryCamera}
-                          className={`flex items-center gap-3 px-8 py-3.5 rounded-2xl font-bold transition-all active:scale-95 ${theme === 'dark'
-                            ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20'
-                            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl'
-                            }`}
-                        >
-                          <Camera className="w-5 h-5" />
-                          Enable Webcam
-                        </button>
-                      </div>
+                          <button
+                            onClick={retryCamera}
+                            className={`flex items-center gap-3 px-8 py-3.5 rounded-2xl font-bold transition-all active:scale-95 ${theme === 'dark'
+                              ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20'
+                              : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl'
+                              }`}
+                          >
+                            <Camera className="w-5 h-5" />
+                            Enable Webcam
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
