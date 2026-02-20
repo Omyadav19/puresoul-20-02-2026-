@@ -61,12 +61,22 @@ const EmotionDetectionPage = () => {
   };
 
   const initializeEmotionDetector = async () => {
-    if (emotionDetectorRef.current && modelReady) return;
+    // PREVENT DOUBLE LOADING (Fixes the buffer hang)
+    if (isModelLoading || modelReady) {
+      addLog(isModelLoading ? 'Already loading...' : 'AI Engine ready');
+      return;
+    }
+
     setIsModelLoading(true);
     setDetectionError(null);
     addLog('Starting AI Neural Engine...');
 
     try {
+      // If there's an old instance, clean it up before making a new one
+      if (emotionDetectorRef.current) {
+        try { emotionDetectorRef.current.dispose(); } catch (e) { }
+        emotionDetectorRef.current = null;
+      }
       // Create a timeout to prevent hanging forever if the models download slowly
       const initPromise = (async () => {
         emotionDetectorRef.current = new MediaPipeEmotionDetector();
@@ -274,9 +284,20 @@ const EmotionDetectionPage = () => {
     if (!user) navigate('/login');
     else if (hasPermission === null) requestCameraPermission();
     return () => {
-      if (stream) stream.getTracks().forEach(track => track.stop());
-      if (emotionDetectorRef.current) emotionDetectorRef.current.dispose();
+      addLog('Leaving page, cleaning up resources...');
+      if (stream) {
+        stream.getTracks().forEach(track => {
+          track.stop();
+          addLog(`Camera track ${track.label} stopped`);
+        });
+      }
+      if (emotionDetectorRef.current) {
+        emotionDetectorRef.current.dispose();
+        emotionDetectorRef.current = null;
+      }
       if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
+      setModelReady(false);
+      setIsModelLoading(false);
     };
   }, [user, hasPermission, stream, navigate]);
 
