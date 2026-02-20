@@ -83,17 +83,18 @@ const EmotionDetectionPage = () => {
         return await emotionDetectorRef.current.initialize();
       })();
 
+      // Create a timeout — 60 seconds to allow for slow connections & CDN fallback
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('AI Engine taking too long to load (Slow Connection)')), 15000)
+        setTimeout(() => reject(new Error('Models took too long. Check your internet connection.')), 60000)
       );
 
       const success = await Promise.race([initPromise, timeoutPromise]);
 
       if (success) {
-        addLog('AI Engine READY');
+        addLog('AI Engine READY ✅');
         setModelReady(true);
       } else {
-        throw new Error('AI Engine failed to start. Try refreshing.');
+        throw new Error('Models could not load. Check internet and try again.');
       }
     } catch (error) {
       addLog(`AI Init Failed: ${error.message}`);
