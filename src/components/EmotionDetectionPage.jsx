@@ -36,6 +36,12 @@ const EmotionDetectionPage = () => {
   const [isModelLoading, setIsModelLoading] = useState(false);
   const [modelReady, setModelReady] = useState(false);
   const [detectionError, setDetectionError] = useState(null);
+  const [debugLogs, setDebugLogs] = useState([]);
+
+  const addLog = (msg) => {
+    console.log(`[SYS] ${msg}`);
+    setDebugLogs(prev => [msg, ...prev.slice(0, 4)]);
+  };
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -68,7 +74,7 @@ const EmotionDetectionPage = () => {
         throw new Error('Could not initialize MediaPipe. This might be a browser compatibility issue.');
       }
     } catch (error) {
-      console.error('Error initializing MediaPipe emotion detector:', error);
+      addLog(`AI Init Error: ${error.message}`);
       setDetectionError(`Neural engine failed: ${error.message || 'Check your internet connection'}`);
     } finally {
       setIsModelLoading(false);
@@ -77,48 +83,52 @@ const EmotionDetectionPage = () => {
 
   const requestCameraPermission = async () => {
     try {
-      console.log('Requesting camera permission...');
+      addLog('Requesting camera access...');
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
           facingMode: 'user'
         }
       });
 
-      console.log('Camera permission granted');
+      addLog('Camera access GRANTED');
       setStream(mediaStream);
       setHasPermission(true);
 
       if (videoRef.current) {
+        addLog('Attaching stream to video tag');
         videoRef.current.srcObject = mediaStream;
 
-        // Use multiple events to ensure initialization
         const handleVideoReady = () => {
-          console.log('Video stream ready, initializing detector...');
-          initializeEmotionDetector();
+          if (videoRef.current && videoRef.current.videoWidth > 0) {
+            addLog(`Video feed active: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`);
+            initializeEmotionDetector();
+          }
         };
 
         videoRef.current.onloadedmetadata = handleVideoReady;
         videoRef.current.onloadeddata = handleVideoReady;
 
-        // Fallback: If events don't fire within 2s, try anyway if video seems active
+        // Fallback for browsers with slow metadata
         setTimeout(() => {
           if (!modelReady && !isModelLoading) {
+            addLog('Metadata timeout, checking manually');
             handleVideoReady();
           }
         }, 3000);
 
         try {
           await videoRef.current.play();
+          addLog('Video playback started');
         } catch (playError) {
-          console.error('Error playing video:', playError);
+          addLog(`Playback error: ${playError.message}`);
         }
       }
     } catch (error) {
-      console.error('Camera permission denied or error:', error);
+      addLog(`Camera Error: ${error.name}`);
       setHasPermission(false);
-      setDetectionError('Could not access camera. Please check permissions and refresh.');
+      setDetectionError(`Camera Blocked: ${error.message}. Please click the lock icon next to the URL bar and allow 'Camera'.`);
     }
   };
 
