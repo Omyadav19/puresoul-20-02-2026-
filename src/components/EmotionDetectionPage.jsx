@@ -321,14 +321,29 @@ class EmotionDetector {
     // Draw emotion label background
     const labelWidth = 200;
     const labelHeight = 60;
+
+    // --- UN-MIRROR TRANSFORMATION ---
+    // The canvas is mirrored via CSS, so we flip the text/emoji back.
+    ctx.save();
+
+    // Calculate label position
+    const labelX = face.x;
+    const labelY = face.y - labelHeight;
+
+    // Move to the label's center, flip, then move back
+    ctx.translate(labelX + labelWidth / 2, labelY + labelHeight / 2);
+    ctx.scale(-1, 1);
+    ctx.translate(-(labelWidth / 2), -(labelHeight / 2));
+
+    // Draw background
     ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-    ctx.fillRect(face.x, face.y - labelHeight, labelWidth, labelHeight);
+    ctx.fillRect(0, 0, labelWidth, labelHeight);
 
     // Draw emotion text
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 16px Arial';
-    ctx.fillText(`${emotion.toUpperCase()}`, face.x + 5, face.y - 35);
-    ctx.fillText(`${Math.round(confidence * 100)}% confident`, face.x + 5, face.y - 15);
+    ctx.fillText(`${emotion.toUpperCase()}`, 5, 25);
+    ctx.fillText(`${Math.round(confidence * 100)}% confident`, 5, 45);
 
     // Draw emotion emoji
     ctx.font = '24px Arial';
@@ -341,7 +356,9 @@ class EmotionDetector {
       sad: '😢',
       surprise: '😲'
     };
-    ctx.fillText(emojis[emotion] || '😐', face.x + 5, face.y - 5);
+    ctx.fillText(emojis[emotion] || '😐', labelWidth - 35, 35);
+
+    ctx.restore();
 
     return {
       x: face.x,
