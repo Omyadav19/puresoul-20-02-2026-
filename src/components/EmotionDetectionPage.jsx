@@ -31,7 +31,7 @@ const EmotionDetectionPage = () => {
   const [isDetecting, setIsDetecting] = useState(false);
   const [currentEmotionState, setCurrentEmotionState] = useState(null);
   const [detectionHistory, setDetectionHistory] = useState([]);
-  const [hasPermission, setHasPermission] = useState(null);
+  const [hasPermission, setHasPermission] = useState(false);
   const [stream, setStream] = useState(null);
   const [isModelLoading, setIsModelLoading] = useState(false);
   const [modelReady, setModelReady] = useState(false);
@@ -275,7 +275,8 @@ const EmotionDetectionPage = () => {
   // --- REACT LIFECYCLE HOOKS ---
   useEffect(() => {
     if (!user) navigate('/login');
-    else if (hasPermission === null) requestCameraPermission();
+    // Removal of automatic camera request to stay on 'Enable Camera' page
+    // else if (hasPermission === null) requestCameraPermission();
     return () => {
       if (stream) stream.getTracks().forEach(track => track.stop());
       if (emotionDetectorRef.current) emotionDetectorRef.current.dispose();
@@ -536,7 +537,21 @@ const EmotionDetectionPage = () => {
                       />
                       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none transform scale-x-[-1]" />
 
+                      {/* Loading/Status Overlays */}
+                      {!modelReady && !currentEmotionState && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-20">
+                          <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
+                          <p className="text-white font-bold tracking-wide drop-shadow-lg">Initializing Neural Engine...</p>
+                          <p className="text-white/70 text-[10px] mt-2 bg-black/40 px-3 py-1 rounded-full">Connecting to AI models (may take 10-20s)</p>
 
+                          <button
+                            onClick={initializeEmotionDetector}
+                            className="mt-6 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-xs font-bold transition-all"
+                          >
+                            Retry AI Loading
+                          </button>
+                        </div>
+                      )}
 
                       {/* Tech Overlay Elements */}
                       <div className="absolute inset-0 pointer-events-none">
@@ -577,6 +592,13 @@ const EmotionDetectionPage = () => {
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full text-slate-500 p-12 text-center">
                       {isModelLoading ? (
+                        <div className="flex flex-col items-center gap-4">
+                          <div className="relative w-16 h-16">
+                            <div className="absolute inset-0 border-t-4 border-blue-500 rounded-full animate-spin"></div>
+                          </div>
+                          <p className="font-medium animate-pulse">Initializing Neural Engine...</p>
+                        </div>
+                      ) : (
                         <div className="flex flex-col items-center max-w-sm">
                           <CameraOff className="w-16 h-16 mx-auto mb-6 opacity-30" />
                           <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Webcam Not Active</h3>
