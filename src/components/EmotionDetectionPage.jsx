@@ -12,7 +12,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import { useCredits } from '../context/CreditContext.jsx';
-import MediaPipeEmotionDetector from '../utils/emotionDetection.js';
+import MediaPipeEmotionDetector from '../utils/mediapipeDetection.js';
 
 const EmotionDetectionPage = () => {
   const navigate = useNavigate();
@@ -38,7 +38,6 @@ const EmotionDetectionPage = () => {
   const [detectionError, setDetectionError] = useState(null);
   const [scanProgress, setScanProgress] = useState(0);
   const [debugLogs, setDebugLogs] = useState([]);
-  const [isActivating, setIsActivating] = useState(false);
 
   const addLog = (msg) => {
     console.log(`[SYS] ${msg}`);
@@ -63,7 +62,7 @@ const EmotionDetectionPage = () => {
   };
 
   const initializeEmotionDetector = async () => {
-    if (emotionDetectorRef.current && (modelReady || isModelLoading)) return;
+    if (emotionDetectorRef.current && modelReady) return;
     setIsModelLoading(true);
     setDetectionError(null);
     addLog('Starting AI Neural Engine...');
@@ -109,12 +108,40 @@ const EmotionDetectionPage = () => {
       addLog('Camera access GRANTED');
       setStream(mediaStream);
       setHasPermission(true);
-      return mediaStream;
+
+      if (videoRef.current) {
+        addLog('Attaching stream to video tag');
+        videoRef.current.srcObject = mediaStream;
+
+        const handleVideoReady = () => {
+          if (videoRef.current && videoRef.current.videoWidth > 0) {
+            addLog(`Video feed active: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`);
+            initializeEmotionDetector();
+          }
+        };
+
+        videoRef.current.onloadedmetadata = handleVideoReady;
+        videoRef.current.onloadeddata = handleVideoReady;
+
+        // Fallback for browsers with slow metadata
+        setTimeout(() => {
+          if (!modelReady && !isModelLoading) {
+            addLog('Metadata timeout, checking manually');
+            handleVideoReady();
+          }
+        }, 3000);
+
+        try {
+          await videoRef.current.play();
+          addLog('Video playback started');
+        } catch (playError) {
+          addLog(`Playback error: ${playError.message}`);
+        }
+      }
     } catch (error) {
       addLog(`Camera Error: ${error.name}`);
       setHasPermission(false);
       setDetectionError(`Camera Blocked: ${error.message}. Please click the lock icon next to the URL bar and allow 'Camera'.`);
-      return null;
     }
   };
 
@@ -169,37 +196,10 @@ const EmotionDetectionPage = () => {
     navigate('/therapy-session', { state: { category: 'Just Talk', initialEmotion: dominantEmotion } });
   };
 
-  const handleEnableEverything = async () => {
-    if (isActivating || (hasPermission && modelReady)) return;
-    setIsActivating(true);
-    addLog('Automatically activating Camera & AI...');
-
-    try {
-      // 1. Start AI model loading immediately (Parallel)
-      const modelPromise = initializeEmotionDetector();
-
-      // 2. Request camera
-      const cameraStream = await requestCameraPermission();
-
-      if (!cameraStream) {
-        setIsActivating(false);
-        return;
-      }
-
-      // Wait briefly for model, though useEffect will handle it too
-      await Promise.race([modelPromise, new Promise(r => setTimeout(r, 2000))]);
-
-    } catch (err) {
-      console.error("Auto-activation failed", err);
-    } finally {
-      setIsActivating(false);
-    }
-  };
-
   const retryCamera = () => {
     setDetectionError(null);
     setHasPermission(null);
-    handleEnableEverything();
+    requestCameraPermission();
   };
 
   const handleCloseTips = () => {
@@ -274,17 +274,14 @@ const EmotionDetectionPage = () => {
 
   // --- REACT LIFECYCLE HOOKS ---
   useEffect(() => {
-    if (!user) {
-      navigate('/login');
-    } else if (hasPermission === null && !isActivating) {
-      handleEnableEverything();
-    }
+    if (!user) navigate('/login');
+    else if (hasPermission === null) requestCameraPermission();
     return () => {
       if (stream) stream.getTracks().forEach(track => track.stop());
       if (emotionDetectorRef.current) emotionDetectorRef.current.dispose();
       if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
     };
-  }, [user, hasPermission, stream, navigate, isActivating]);
+  }, [user, hasPermission, stream, navigate]);
 
   // --- UPDATED useEffect FOR AUTOMATIC DETECTION ---
   useEffect(() => {
@@ -304,41 +301,6 @@ const EmotionDetectionPage = () => {
       if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
     };
   }, [isDetecting, hasPermission, modelReady, showEmotionPopup, showCalmingTips]);
-
-  // Handle stream attachment and initialization trigger
-  useEffect(() => {
-    if (hasPermission && stream && videoRef.current && !videoRef.current.srcObject) {
-      addLog('Syncing stream to video tag...');
-      videoRef.current.srcObject = stream;
-
-      const handleVideoReady = () => {
-        if (videoRef.current && videoRef.current.videoWidth > 0) {
-          addLog(`Video feed active: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`);
-          // Ensure model is starting if not already
-          if (!modelReady && !isModelLoading) {
-            initializeEmotionDetector();
-          }
-        }
-      };
-
-      videoRef.current.onloadedmetadata = handleVideoReady;
-      videoRef.current.onloadeddata = handleVideoReady;
-
-      videoRef.current.play().catch(playError => {
-        addLog(`Playback error: ${playError.message}`);
-      });
-
-      // Fallback check
-      const checkInterval = setInterval(() => {
-        if (videoRef.current && videoRef.current.videoWidth > 0 && !modelReady && !isModelLoading) {
-          handleVideoReady();
-          clearInterval(checkInterval);
-        }
-      }, 1000);
-
-      return () => clearInterval(checkInterval);
-    }
-  }, [hasPermission, stream, modelReady, isModelLoading]);
 
   const EmotionIconComponent = currentEmotionState ? emotionDataMap[currentEmotionState.emotion].component : Camera;
 
@@ -574,7 +536,21 @@ const EmotionDetectionPage = () => {
                       />
                       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none transform scale-x-[-1]" />
 
-                      {/* Loading/Status Overlays removed per user request */}
+                      {/* Loading/Status Overlays */}
+                      {!modelReady && !currentEmotionState && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-20">
+                          <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
+                          <p className="text-white font-bold tracking-wide drop-shadow-lg">Initializing Neural Engine...</p>
+                          <p className="text-white/70 text-[10px] mt-2 bg-black/40 px-3 py-1 rounded-full">Connecting to AI models (may take 10-20s)</p>
+
+                          <button
+                            onClick={initializeEmotionDetector}
+                            className="mt-6 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-xs font-bold transition-all"
+                          >
+                            Retry AI Loading
+                          </button>
+                        </div>
+                      )}
 
                       {/* Tech Overlay Elements */}
                       <div className="absolute inset-0 pointer-events-none">
@@ -656,7 +632,7 @@ const EmotionDetectionPage = () => {
                   <li>• Ensure the browser has <b>Camera Permissions</b> enabled (check the address bar lock icon).</li>
                   <li>• Close other apps using the camera (Zoom, Teams, WhatsApp Web).</li>
                   <li>• Use <b>Google Chrome</b> or <b>Edge</b> for the best stability.</li>
-                  <li>• Try <b>Refreshing (F5)</b> if the video feed doesn't appear after a few seconds.</li>
+                  <li>• Try <b>Refreshing (F5)</b> if the "Initializing" spinner stays forever.</li>
                 </ul>
               </div>
             </motion.div>
