@@ -31,7 +31,7 @@ const EmotionDetectionPage = () => {
   const [isDetecting, setIsDetecting] = useState(false);
   const [currentEmotionState, setCurrentEmotionState] = useState(null);
   const [detectionHistory, setDetectionHistory] = useState([]);
-  const [hasPermission, setHasPermission] = useState(false);
+  const [hasPermission, setHasPermission] = useState(null);
   const [stream, setStream] = useState(null);
   const [isModelLoading, setIsModelLoading] = useState(false);
   const [modelReady, setModelReady] = useState(false);
@@ -275,8 +275,8 @@ const EmotionDetectionPage = () => {
   // --- REACT LIFECYCLE HOOKS ---
   useEffect(() => {
     if (!user) navigate('/login');
-    // Removal of automatic camera request to stay on 'Enable Camera' page
-    // else if (hasPermission === null) requestCameraPermission();
+    // else if (hasPermission === null) requestCameraPermission(); // Disabled auto-request per user request
+    else if (hasPermission === null) setHasPermission(false); // Default to not active to show the enable button
     return () => {
       if (stream) stream.getTracks().forEach(track => track.stop());
       if (emotionDetectorRef.current) emotionDetectorRef.current.dispose();
@@ -537,8 +537,7 @@ const EmotionDetectionPage = () => {
                       />
                       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none transform scale-x-[-1]" />
 
-                
-                      
+                      {/* Loading/Status Overlays removed per user request */}
 
                       {/* Tech Overlay Elements */}
                       <div className="absolute inset-0 pointer-events-none">
@@ -578,29 +577,23 @@ const EmotionDetectionPage = () => {
                     </>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full text-slate-500 p-12 text-center">
-                      {isModelLoading ? (
-                        <div className="flex flex-col items-center gap-4">
-                          <div className="relative w-16 h-16">
-                            <div className="absolute inset-0 border-t-4 border-blue-500 rounded-full animate-spin"></div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center max-w-sm">
-                          <CameraOff className="w-16 h-16 mx-auto mb-6 opacity-30" />
-                          <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Webcam Not Active</h3>
-                          <p className="text-sm mb-8 opacity-60">Please allow camera access and ensure no other app is using it.</p>
+                      {/* Always show Enable Webcam state, hidden loading spinner per user request */}
+                      <div className="flex flex-col items-center max-w-sm">
+                        <CameraOff className="w-16 h-16 mx-auto mb-6 opacity-30" />
+                        <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Webcam Not Active</h3>
+                        <p className="text-sm mb-8 opacity-60">Please allow camera access and ensure no other app is using it.</p>
 
-                          <button
-                            onClick={retryCamera}
-                            className={`flex items-center gap-3 px-8 py-3.5 rounded-2xl font-bold transition-all active:scale-95 ${theme === 'dark'
-                              ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20'
-                              : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl'
-                              }`}
-                          >
-                            <Camera className="w-5 h-5" />
-                            Enable Webcam
-                          </button>
-                        </div>
-                      )}
+                        <button
+                          onClick={retryCamera}
+                          className={`flex items-center gap-3 px-8 py-3.5 rounded-2xl font-bold transition-all active:scale-95 ${theme === 'dark'
+                            ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20'
+                            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl'
+                            }`}
+                        >
+                          <Camera className="w-5 h-5" />
+                          Enable Webcam
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -616,7 +609,7 @@ const EmotionDetectionPage = () => {
                   <li>• Ensure the browser has <b>Camera Permissions</b> enabled (check the address bar lock icon).</li>
                   <li>• Close other apps using the camera (Zoom, Teams, WhatsApp Web).</li>
                   <li>• Use <b>Google Chrome</b> or <b>Edge</b> for the best stability.</li>
-                  <li>• Try <b>Refreshing (F5)</b> if the "Initializing" spinner stays forever.</li>
+                  <li>• Try <b>Refreshing (F5)</b> if the video feed doesn't appear after a few seconds.</li>
                 </ul>
               </div>
             </motion.div>
