@@ -80,6 +80,7 @@ const EmotionDetectionPage = () => {
       // Create a timeout to prevent hanging forever if the models download slowly
       const initPromise = (async () => {
         emotionDetectorRef.current = new AdvancedFaceDetector();
+        emotionDetectorRef.current.onLog = (msg) => addLog(msg);
         return await emotionDetectorRef.current.initialize();
       })();
 
@@ -560,14 +561,40 @@ const EmotionDetectionPage = () => {
                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-20">
                           <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
                           <p className="text-white font-bold tracking-wide drop-shadow-lg">Loading Face AI...</p>
-                          <p className="text-white/70 text-[10px] mt-2 bg-black/40 px-3 py-1 rounded-full">Connecting to AI models (5-10s first time)</p>
+                          <p className="text-white/70 text-[10px] mt-2 bg-black/40 px-3 py-1 rounded-full mb-6 italic">
+                            Connecting to AI models...
+                          </p>
 
-                          <button
-                            onClick={initializeEmotionDetector}
-                            className="mt-6 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-xs font-bold transition-all"
-                          >
-                            Retry AI Loading
-                          </button>
+                          <div className="flex flex-wrap items-center justify-center gap-3">
+                            <button
+                              onClick={initializeEmotionDetector}
+                              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl text-white text-xs font-bold transition-all shadow-lg"
+                            >
+                              Retry AI
+                            </button>
+                            <button
+                              onClick={() => {
+                                setModelReady(true);
+                                addLog('AI Bypassed: Basic camera mode');
+                              }}
+                              className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-xs font-bold transition-all"
+                            >
+                              Bypass AI
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Debug Logs Overlay */}
+                      {debugLogs.length > 0 && (
+                        <div className="absolute bottom-6 left-6 right-6 z-30 pointer-events-none">
+                          <div className="flex flex-col gap-1 items-start">
+                            {debugLogs.slice(-4).map((log, i) => (
+                              <span key={i} className="px-2.5 py-1 bg-black/70 text-[9px] text-blue-300 font-mono rounded border border-blue-500/20 backdrop-blur-sm">
+                                {log}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
 
