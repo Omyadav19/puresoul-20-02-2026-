@@ -109,35 +109,9 @@ const EmotionDetectionPage = () => {
       setStream(mediaStream);
       setHasPermission(true);
 
-      if (videoRef.current) {
-        addLog('Attaching stream to video tag');
-        videoRef.current.srcObject = mediaStream;
-
-        const handleVideoReady = () => {
-          if (videoRef.current && videoRef.current.videoWidth > 0) {
-            addLog(`Video feed active: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`);
-            initializeEmotionDetector();
-          }
-        };
-
-        videoRef.current.onloadedmetadata = handleVideoReady;
-        videoRef.current.onloadeddata = handleVideoReady;
-
-        // Fallback for browsers with slow metadata
-        setTimeout(() => {
-          if (!modelReady && !isModelLoading) {
-            addLog('Metadata timeout, checking manually');
-            handleVideoReady();
-          }
-        }, 3000);
-
-        try {
-          await videoRef.current.play();
-          addLog('Video playback started');
-        } catch (playError) {
-          addLog(`Playback error: ${playError.message}`);
-        }
-      }
+      setStream(mediaStream);
+      setHasPermission(true);
+      addLog('Camera state updated');
     } catch (error) {
       addLog(`Camera Error: ${error.name}`);
       setHasPermission(false);
@@ -275,13 +249,53 @@ const EmotionDetectionPage = () => {
   // --- REACT LIFECYCLE HOOKS ---
   useEffect(() => {
     if (!user) navigate('/login');
-    else if (hasPermission === null) requestCameraPermission();
+    else if (hasPermission === null && !isModelLoading) {
+      requestCameraPermission();
+    }
     return () => {
-      if (stream) stream.getTracks().forEach(track => track.stop());
+      if (stream) {
+        stream.getTracks().forEach(track => {
+          track.stop();
+          addLog(`Stopped track: ${track.kind}`);
+        });
+      }
       if (emotionDetectorRef.current) emotionDetectorRef.current.dispose();
       if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
     };
-  }, [user, hasPermission, stream, navigate]);
+  }, [user, hasPermission, navigate]);
+
+  // Dedicated effect to attach stream once video element is rendered
+  useEffect(() => {
+    if (hasPermission && stream && videoRef.current) {
+      if (videoRef.current.srcObject !== stream) {
+        addLog('Attaching stream to video element...');
+        videoRef.current.srcObject = stream;
+
+        const handleVideoReady = () => {
+          if (videoRef.current && videoRef.current.videoWidth > 0) {
+            addLog(`Video ready: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`);
+            initializeEmotionDetector();
+          }
+        };
+
+        videoRef.current.onloadedmetadata = handleVideoReady;
+        videoRef.current.onloadeddata = handleVideoReady;
+
+        // Aggressive play attempt
+        videoRef.current.play().catch(e => addLog(`Play error: ${e.message}`));
+
+        // Direct fallback check
+        const checkInterval = setInterval(() => {
+          if (videoRef.current && videoRef.current.videoWidth > 0) {
+            handleVideoReady();
+            clearInterval(checkInterval);
+          }
+        }, 500);
+
+        return () => clearInterval(checkInterval);
+      }
+    }
+  }, [hasPermission, stream, videoRef.current]);
 
   // --- UPDATED useEffect FOR AUTOMATIC DETECTION ---
   useEffect(() => {
@@ -525,8 +539,11 @@ const EmotionDetectionPage = () => {
                 <div className="relative aspect-video rounded-[2rem] overflow-hidden bg-black">
                   {hasPermission ? (
                     <>
-                      <video
+                      <motion.video
                         ref={videoRef}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.5 }}
                         className="w-full h-full object-cover transform scale-x-[-1]"
                         autoPlay
                         muted
