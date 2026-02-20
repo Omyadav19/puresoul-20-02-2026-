@@ -13,20 +13,20 @@ class EmotionDetector {
   async initialize() {
     try {
       console.log('Initializing TensorFlow.js...');
-      
+
       // Set backend preference
       await tf.setBackend('webgl');
       await tf.ready();
-      
+
       console.log('TensorFlow.js backend:', tf.getBackend());
       console.log('Loading emotion recognition model...');
-      
+
       // Create a more sophisticated emotion detection model
       this.model = await this.createEmotionModel();
-      
+
       this.isInitialized = true;
       console.log('Emotion detector initialized successfully');
-      
+
       return true;
     } catch (error) {
       console.error('Failed to initialize emotion detector:', error);
@@ -150,12 +150,12 @@ class EmotionDetector {
       // Use a more robust face detection approach
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      
+
       canvas.width = videoElement.videoWidth;
       canvas.height = videoElement.videoHeight;
-      
+
       ctx.drawImage(videoElement, 0, 0);
-      
+
       // Simple face detection using Viola-Jones-like approach
       // In a real implementation, you'd use opencv.js or face-api.js
       const faces = this.detectFacesSimple(canvas);
@@ -167,22 +167,22 @@ class EmotionDetector {
     const ctx = canvas.getContext('2d');
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
-    
+
     // Simple face detection based on skin color and facial features
     const faces = [];
     const width = canvas.width;
     const height = canvas.height;
-    
+
     // Scan for face-like regions
     for (let y = 0; y < height - 100; y += 20) {
       for (let x = 0; x < width - 100; x += 20) {
         const faceScore = this.calculateFaceScore(data, x, y, width, height);
-        
+
         if (faceScore > 0.3) {
           // Estimate face bounds
           const faceWidth = Math.min(150, width - x);
           const faceHeight = Math.min(150, height - y);
-          
+
           faces.push({
             x: x,
             y: y,
@@ -190,14 +190,14 @@ class EmotionDetector {
             height: faceHeight,
             confidence: faceScore
           });
-          
+
           // Only detect one face for simplicity
           break;
         }
       }
       if (faces.length > 0) break;
     }
-    
+
     // If no faces detected using simple method, assume center face
     if (faces.length === 0) {
       const centerX = Math.max(0, (width - 150) / 2);
@@ -210,14 +210,14 @@ class EmotionDetector {
         confidence: 0.5
       });
     }
-    
+
     return faces;
   }
 
   calculateFaceScore(data, x, y, width, height) {
     let skinPixels = 0;
     let totalPixels = 0;
-    
+
     // Sample pixels in the region
     for (let dy = 0; dy < 100 && y + dy < height; dy += 5) {
       for (let dx = 0; dx < 100 && x + dx < width; dx += 5) {
@@ -225,7 +225,7 @@ class EmotionDetector {
         const r = data[idx];
         const g = data[idx + 1];
         const b = data[idx + 2];
-        
+
         // Simple skin color detection
         if (this.isSkinColor(r, g, b)) {
           skinPixels++;
@@ -233,15 +233,15 @@ class EmotionDetector {
         totalPixels++;
       }
     }
-    
+
     return totalPixels > 0 ? skinPixels / totalPixels : 0;
   }
 
   isSkinColor(r, g, b) {
     // Simple skin color detection
     return (r > 95 && g > 40 && b > 20 &&
-            Math.max(r, g, b) - Math.min(r, g, b) > 15 &&
-            Math.abs(r - g) > 15 && r > g && r > b);
+      Math.max(r, g, b) - Math.min(r, g, b) > 15 &&
+      Math.abs(r - g) > 15 && r > g && r > b);
   }
 
   preprocessFace(canvas, face) {
@@ -261,11 +261,11 @@ class EmotionDetector {
     // Convert to grayscale and normalize
     const imageData = faceCtx.getImageData(0, 0, 48, 48);
     const grayscale = new Float32Array(48 * 48);
-    
+
     for (let i = 0; i < imageData.data.length; i += 4) {
-      const gray = (imageData.data[i] * 0.299 + 
-                   imageData.data[i + 1] * 0.587 + 
-                   imageData.data[i + 2] * 0.114) / 255.0;
+      const gray = (imageData.data[i] * 0.299 +
+        imageData.data[i + 1] * 0.587 +
+        imageData.data[i + 2] * 0.114) / 255.0;
       grayscale[i / 4] = gray;
     }
 
@@ -281,14 +281,14 @@ class EmotionDetector {
       // Get prediction from model
       const prediction = this.model.predict(faceImage);
       const probabilities = await prediction.data();
-      
+
       // Clean up tensors
       prediction.dispose();
-      
+
       // Find the emotion with highest probability
       let maxIndex = 0;
       let maxProb = probabilities[0];
-      
+
       for (let i = 1; i < probabilities.length; i++) {
         if (probabilities[i] > maxProb) {
           maxProb = probabilities[i];
@@ -312,26 +312,38 @@ class EmotionDetector {
 
   drawFaceBox(canvas, face, emotion, confidence) {
     const ctx = canvas.getContext('2d');
-    
+
     // Draw face bounding box
     ctx.strokeStyle = '#00ff00';
     ctx.lineWidth = 3;
     ctx.strokeRect(face.x, face.y, face.width, face.height);
 
-    // Draw emotion label background
-    const labelWidth = 200;
+    // --- FIX MIRRORED TEXT & EMOJI ---
+    // The video/canvas is flipped horizontally via scaleX(-1). 
+    // To make text and emojis readable, we must flip the context back for this section.
+    ctx.save();
+
+    const labelWidth = 180;
     const labelHeight = 60;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-    ctx.fillRect(face.x, face.y - labelHeight, labelWidth, labelHeight);
-    
-    // Draw emotion text
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 16px Arial';
-    ctx.fillText(`${emotion.toUpperCase()}`, face.x + 5, face.y - 35);
-    ctx.fillText(`${Math.round(confidence * 100)}% confident`, face.x + 5, face.y - 15);
+
+    // Position label above the box
+    // We adjust the anchor point because we're about to flip the coordinates
+    ctx.translate(face.x, face.y - labelHeight);
+    ctx.scale(-1, 1);
+    // Since we scaled by -1, we're now drawing from the right-hand side of the previous face.x
+    // We need to shift everything back so it fits 'inside' the intended width
+    ctx.translate(-labelWidth, 0);
+
+    // Draw label background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    // Draw a rounded rectangle manually for compatibility
+    const r = 10;
+    ctx.beginPath();
+    ctx.roundRect(0, 0, labelWidth, labelHeight, r);
+    ctx.fill();
 
     // Draw emotion emoji
-    ctx.font = '24px Arial';
+    ctx.font = '28px Arial';
     const emojis = {
       angry: '😠',
       disgust: '🤢',
@@ -341,7 +353,20 @@ class EmotionDetector {
       sad: '😢',
       surprise: '😲'
     };
-    ctx.fillText(emojis[emotion] || '😐', face.x + 5, face.y - 5);
+    const emoji = emojis[emotion] || '😐';
+    ctx.fillText(emoji, 10, 40);
+
+    // Draw emotion text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 14px Arial';
+    ctx.fillText(emotion.toUpperCase(), 45, 25);
+
+    // Draw confidence text
+    ctx.font = '10px Arial';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.fillText(`${Math.round(confidence * 100)}% Confident`, 45, 45);
+
+    ctx.restore();
 
     return {
       x: face.x,
@@ -361,29 +386,29 @@ class EmotionDetector {
       // Set canvas size to match video
       canvasElement.width = videoElement.videoWidth;
       canvasElement.height = videoElement.videoHeight;
-      
+
       const ctx = canvasElement.getContext('2d');
       ctx.drawImage(videoElement, 0, 0);
 
       // Detect faces
       const faces = await this.detectFaces(videoElement);
-      
+
       if (faces.length === 0) {
         return null;
       }
 
       // Process the first detected face
       const face = faces[0];
-      
+
       // Preprocess face for emotion recognition
       const faceImage = this.preprocessFace(canvasElement, face);
-      
+
       // Predict emotion
       const emotionResult = await this.predictEmotion(faceImage);
-      
+
       // Clean up tensor
       faceImage.dispose();
-      
+
       if (!emotionResult) {
         return null;
       }
