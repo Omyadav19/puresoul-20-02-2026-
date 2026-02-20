@@ -553,13 +553,6 @@ const EmotionDetectionPage = () => {
                       />
                       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none transform scale-x-[-1]" />
 
-                      {/* AI STATUS OVERLAY (Non-blocking) */}
-                      {!modelReady && (
-                        <div className="absolute top-6 right-6 flex items-center gap-2 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 z-30">
-                          <div className="w-3 h-3 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
-                          <span className="text-white/80 text-[10px] font-black tracking-[0.2em] uppercase">AI Preparing...</span>
-                        </div>
-                      )}
 
                       {/* Tech Overlay Elements */}
                       <div className="absolute inset-0 pointer-events-none">
@@ -568,33 +561,6 @@ const EmotionDetectionPage = () => {
                         <div className="absolute bottom-4 left-4 w-12 h-12 border-l-4 border-b-4 border-white/30 rounded-bl-xl" />
                         <div className="absolute bottom-4 right-4 w-12 h-12 border-r-4 border-b-4 border-white/30 rounded-br-xl" />
 
-                        {isDetecting && (
-                          <>
-                            <div className="absolute top-6 left-6 flex items-center gap-2 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 z-30">
-                              <span className="relative flex h-2.5 w-2.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
-                              </span>
-                              <span className="text-white/80 text-[10px] font-black tracking-[0.2em] uppercase">AI Scanning...</span>
-                            </div>
-
-                            {/* Scanning Line Animation */}
-                            <motion.div
-                              className="absolute left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-blue-500 to-transparent shadow-[0_0_15px_rgba(59,130,246,0.8)] z-20 pointer-events-none"
-                              animate={{ top: ['0%', '100%', '0%'] }}
-                              transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                            />
-
-                            {/* Scan Progress Bar Overlay */}
-                            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-48 h-1 bg-white/10 backdrop-blur-md rounded-full overflow-hidden border border-white/5 z-30">
-                              <motion.div
-                                className="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.6)]"
-                                animate={{ width: `${scanProgress}%` }}
-                                transition={{ type: "spring", stiffness: 100, damping: 20 }}
-                              />
-                            </div>
-                          </>
-                        )}
                       </div>
                     </>
                   ) : (
