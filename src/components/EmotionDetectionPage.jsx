@@ -12,7 +12,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import { useCredits } from '../context/CreditContext.jsx';
-import MediaPipeEmotionDetector from '../utils/mediapipeDetection.js';
+import AdvancedFaceDetector from '../utils/faceDetection.js';
 
 const EmotionDetectionPage = () => {
   const navigate = useNavigate();
@@ -79,7 +79,7 @@ const EmotionDetectionPage = () => {
       }
       // Create a timeout to prevent hanging forever if the models download slowly
       const initPromise = (async () => {
-        emotionDetectorRef.current = new MediaPipeEmotionDetector();
+        emotionDetectorRef.current = new AdvancedFaceDetector();
         return await emotionDetectorRef.current.initialize();
       })();
 
@@ -558,8 +558,8 @@ const EmotionDetectionPage = () => {
                       {!modelReady && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-20">
                           <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
-                          <p className="text-white font-bold tracking-wide drop-shadow-lg">Initializing Neural Engine...</p>
-                          <p className="text-white/70 text-[10px] mt-2 bg-black/40 px-3 py-1 rounded-full">Connecting to AI models (may take 10-20s)</p>
+                          <p className="text-white font-bold tracking-wide drop-shadow-lg">Loading Face AI...</p>
+                          <p className="text-white/70 text-[10px] mt-2 bg-black/40 px-3 py-1 rounded-full">Connecting to AI models (5-10s first time)</p>
 
                           <button
                             onClick={initializeEmotionDetector}
