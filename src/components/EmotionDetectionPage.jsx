@@ -577,13 +577,6 @@ const EmotionDetectionPage = () => {
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full text-slate-500 p-12 text-center">
                       {isModelLoading ? (
-                        <div className="flex flex-col items-center gap-4">
-                          <div className="relative w-16 h-16">
-                            <div className="absolute inset-0 border-t-4 border-blue-500 rounded-full animate-spin"></div>
-                          </div>
-                          <p className="font-medium animate-pulse">Initializing Neural Engine...</p>
-                        </div>
-                      ) : (
                         <div className="flex flex-col items-center max-w-sm">
                           <CameraOff className="w-16 h-16 mx-auto mb-6 opacity-30" />
                           <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Webcam Not Active</h3>
