@@ -556,48 +556,6 @@ const EmotionDetectionPage = () => {
                       />
                       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none transform scale-x-[-1]" />
 
-                      {/* Loading/Status Overlays */}
-                      {!modelReady && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-20">
-                          <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
-                          <p className="text-white font-bold tracking-wide drop-shadow-lg">Loading Face AI...</p>
-                          <p className="text-white/70 text-[10px] mt-2 bg-black/40 px-3 py-1 rounded-full mb-6 italic">
-                            Connecting to AI models...
-                          </p>
-
-                          <div className="flex flex-wrap items-center justify-center gap-3">
-                            <button
-                              onClick={initializeEmotionDetector}
-                              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl text-white text-xs font-bold transition-all shadow-lg"
-                            >
-                              Retry AI
-                            </button>
-                            <button
-                              onClick={() => {
-                                setModelReady(true);
-                                addLog('AI Bypassed: Basic camera mode');
-                              }}
-                              className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white text-xs font-bold transition-all"
-                            >
-                              Bypass AI
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Debug Logs Overlay */}
-                      {debugLogs.length > 0 && (
-                        <div className="absolute bottom-6 left-6 right-6 z-30 pointer-events-none">
-                          <div className="flex flex-col gap-1 items-start">
-                            {debugLogs.slice(-4).map((log, i) => (
-                              <span key={i} className="px-2.5 py-1 bg-black/70 text-[9px] text-blue-300 font-mono rounded border border-blue-500/20 backdrop-blur-sm">
-                                {log}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
                       {/* Tech Overlay Elements */}
                       <div className="absolute inset-0 pointer-events-none">
                         <div className="absolute top-4 left-4 w-12 h-12 border-l-4 border-t-4 border-white/30 rounded-tl-xl" />
@@ -605,7 +563,15 @@ const EmotionDetectionPage = () => {
                         <div className="absolute bottom-4 left-4 w-12 h-12 border-l-4 border-b-4 border-white/30 rounded-bl-xl" />
                         <div className="absolute bottom-4 right-4 w-12 h-12 border-r-4 border-b-4 border-white/30 rounded-br-xl" />
 
-                        {isDetecting && (
+                        {/* Silent Loading Indicator (Minimal) */}
+                        {!modelReady && isDetecting && (
+                          <div className="absolute top-6 right-6 flex items-center gap-2 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+                            <div className="w-2 h-2 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                            <span className="text-white/60 text-[10px] font-bold uppercase tracking-wider">AI Warming Up...</span>
+                          </div>
+                        )}
+
+                        {isDetecting && modelReady && (
                           <div className="absolute top-6 left-6 flex items-center gap-2 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
                             <span className="relative flex h-2.5 w-2.5">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
