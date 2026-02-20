@@ -590,33 +590,31 @@ const EmotionDetectionPage = () => {
                     </>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full text-slate-500 p-12 text-center">
-                      {/* Always show Enable Webcam state, hidden loading spinner per user request */}
-                      <div className="flex flex-col items-center max-w-sm">
-                        <CameraOff className="w-16 h-16 mx-auto mb-6 opacity-30" />
-                        <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Webcam Not Active</h3>
-                        <p className="text-sm mb-8 opacity-60">Please allow camera access and ensure no other app is using it.</p>
+                      {isModelLoading ? (
+                        <div className="flex flex-col items-center gap-4">
+                          <div className="relative w-16 h-16">
+                            <div className="absolute inset-0 border-t-4 border-blue-500 rounded-full animate-spin"></div>
+                          </div>
+                          <p className="font-medium animate-pulse">Initializing Neural Engine...</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center max-w-sm">
+                          <CameraOff className="w-16 h-16 mx-auto mb-6 opacity-30" />
+                          <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Webcam Not Active</h3>
+                          <p className="text-sm mb-8 opacity-60">Please allow camera access and ensure no other app is using it.</p>
 
-                        <button
-                          onClick={handleEnableEverything}
-                          disabled={isActivating}
-                          className={`flex items-center gap-3 px-8 py-3.5 rounded-2xl font-bold transition-all active:scale-95 ${theme === 'dark'
-                            ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20 disabled:bg-blue-800'
-                            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl disabled:bg-blue-400'
-                            } ${isActivating ? 'cursor-not-allowed opacity-70' : ''}`}
-                        >
-                          {isActivating ? (
-                            <div className="flex items-center gap-2">
-                              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                              Waking up AI...
-                            </div>
-                          ) : (
-                            <>
-                              <Camera className="w-5 h-5" />
-                              Enable Webcam
-                            </>
-                          )}
-                        </button>
-                      </div>
+                          <button
+                            onClick={retryCamera}
+                            className={`flex items-center gap-3 px-8 py-3.5 rounded-2xl font-bold transition-all active:scale-95 ${theme === 'dark'
+                              ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20'
+                              : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl'
+                              }`}
+                          >
+                            <Camera className="w-5 h-5" />
+                            Enable Webcam
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
