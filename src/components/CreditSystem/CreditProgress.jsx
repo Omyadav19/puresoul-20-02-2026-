@@ -2,9 +2,8 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useCredits } from '../../context/CreditContext';
 
-const CreditProgress = () => {
-    const { credits } = useCredits();
-    const maxCredits = 12;
+const CreditProgress = () => {const { credits, totalCreditsPurchased } = useCredits();
+    const maxCredits = 12 + (totalCreditsPurchased || 0);
     const progress = (credits / maxCredits) * 100;
 
     // Determine color based on remaining credits
