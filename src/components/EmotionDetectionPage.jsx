@@ -605,53 +605,7 @@ const EmotionDetectionPage = () => {
           {/* Right Column: Stats & Analysis */}
           <div className="lg:col-span-4 flex flex-col gap-6">
 
-            {/* Current Emotion Card */}
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
-              <div className={`backdrop-blur-xl rounded-[2.5rem] p-8 border shadow-xl relative overflow-hidden ${theme === 'dark' ? 'bg-gradient-to-br from-white/10 to-white/5 border-white/10' : 'bg-white border-slate-200'
-                }`}>
-                <h3 className={`text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                  <Brain className="w-4 h-4" /> Real-time Insight
-                </h3>
 
-                <div className="flex flex-col items-center justify-center py-4">
-                  <AnimatePresence mode="wait">
-                    {currentEmotionState ? (
-                      <motion.div
-                        key={currentEmotionState.timestamp}
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.8, opacity: 0 }}
-                        className="flex flex-col items-center w-full"
-                      >
-                        <div className={`w-28 h-28 rounded-3xl flex items-center justify-center text-7xl mb-6 shadow-2xl bg-gradient-to-br ${emotionDataMap[currentEmotionState.emotion].color}`}>
-                          {emotionDataMap[currentEmotionState.emotion].icon}
-                        </div>
-                        <h2 className={`text-4xl font-black capitalize mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
-                          {currentEmotionState.emotion}
-                        </h2>
-
-                        <div className="w-full mt-4 bg-gray-200/20 rounded-full h-2 overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${currentEmotionState.confidence * 100}%` }}
-                            className={`h-full bg-gradient-to-r ${emotionDataMap[currentEmotionState.emotion].color}`}
-                          />
-                        </div>
-                        <div className="flex justify-between w-full mt-2 text-xs font-bold opacity-60">
-                          <span>Confidence</span>
-                          <span>{Math.round(currentEmotionState.confidence * 100)}%</span>
-                        </div>
-                      </motion.div>
-                    ) : (
-                      <div className="text-center py-8 opacity-50">
-                        <Activity className="w-12 h-12 mx-auto mb-4" />
-                        <p>Waiting for data...</p>
-                      </div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
-            </motion.div>
 
             {/* Recent History List */}
             <motion.div
