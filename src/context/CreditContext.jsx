@@ -14,12 +14,14 @@ export const useCredits = () => {
 export const CreditProvider = ({ children }) => {
     const { user } = useApp();
     const [credits, setCredits] = useState(user?.credits || 12);
+    const [totalCreditsPurchased, setTotalCreditsPurchased] = useState(user?.total_credits_purchased || 0);
     const [isLoading, setIsLoading] = useState(false);
 
     // Sync credits from user object in AppContext if it changes
     useEffect(() => {
         if (user) {
             setCredits(user.credits);
+            setTotalCreditsPurchased(user.total_credits_purchased || 0);
         }
     }, [user]);
 
@@ -36,6 +38,7 @@ export const CreditProvider = ({ children }) => {
             if (response.ok) {
                 const data = await response.json();
                 setCredits(data.credits);
+                setTotalCreditsPurchased(data.total_credits_purchased || 0);
             }
         } catch (error) {
             console.error('Failed to refresh credits:', error);
@@ -57,6 +60,9 @@ export const CreditProvider = ({ children }) => {
             if (response.ok) {
                 const data = await response.json();
                 setCredits(data.credits);
+                if (data.total_credits_purchased !== undefined) {
+                    setTotalCreditsPurchased(data.total_credits_purchased);
+                }
                 return true;
             }
             return false;
@@ -81,6 +87,7 @@ export const CreditProvider = ({ children }) => {
             if (response.ok) {
                 const data = await response.json();
                 setCredits(data.credits);
+                setTotalCreditsPurchased(data.total_credits_purchased);
             }
         } catch (error) {
             console.error('Failed to add credits:', error);
@@ -90,6 +97,7 @@ export const CreditProvider = ({ children }) => {
     return (
         <CreditContext.Provider value={{
             credits,
+            totalCreditsPurchased,
             consumeCredit,
             addCredits,
             refreshCredits,
