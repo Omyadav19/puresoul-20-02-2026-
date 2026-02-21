@@ -698,8 +698,8 @@ def _load_session_history(session_id, limit=30):
 def get_response(current_user):
     """Chatbot response endpoint using Groq API with Pro memory support."""
     try:
-        # ── CREDIT CHECK (Only for non-Pro) ──
-        if not current_user.is_pro and current_user.credits <= 0:
+        # Check credits
+        if current_user.credits <= 0:
             return jsonify({
                 'error': 'Insufficient credits',
                 'message': 'Your credits are used up 💛'
@@ -750,16 +750,7 @@ def get_response(current_user):
             _save_message(session_id, 'user', user_message)
             _save_message(session_id, 'ai', response_text)
 
-        # ── DEDUCT CREDIT (Only for non-Pro) ──
-        # We deduct here because the response was successfully generated.
-        if not current_user.is_pro:
-            current_user.credits = max(0, current_user.credits - 1)
-            db.session.commit()
-
-        return jsonify({
-            'therapistResponse': response_text,
-            'remainingCredits': current_user.credits
-        })
+        return jsonify({'therapistResponse': response_text})
 
     except Exception as e:
         print(f"Error calling Groq API: {e}")
