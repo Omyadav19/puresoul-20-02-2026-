@@ -13,7 +13,7 @@ export const useCredits = () => {
 
 export const CreditProvider = ({ children }) => {
     const { user } = useApp();
-    const [credits, setCredits] = useState(user?.credits || 15);
+    const [credits, setCredits] = useState(user?.credits || 12);
     const [isLoading, setIsLoading] = useState(false);
 
     // Sync credits from user object in AppContext if it changes
