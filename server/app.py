@@ -17,7 +17,7 @@ from functools import wraps
 from validation import validate_email, validate_username, validate_password
 from models import db, User, TherapySession, TherapyMessage, ContactUs
 
-print("🔥 RUNNING UPDATED app.py FILE (Pro System) 🔥")
+print("RUNNING UPDATED app.py FILE (Pro System)")
 
 # Load environment variables
 load_dotenv()
@@ -27,7 +27,11 @@ app = Flask(__name__)
 CORS(app)
 
 # Database Configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
+db_uri = os.getenv('SQLALCHEMY_DATABASE_URI')
+if db_uri and db_uri.startswith("postgres://"):
+    db_uri = db_uri.replace("postgres://", "postgresql://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize Extensions
@@ -694,8 +698,8 @@ def _load_session_history(session_id, limit=30):
 def get_response(current_user):
     """Chatbot response endpoint using Groq API with Pro memory support."""
     try:
-        # Check credits
-        if current_user.credits <= 0:
+        # ── CREDIT CHECK (Only for non-Pro) ──
+        if not current_user.is_pro and current_user.credits <= 0:
             return jsonify({
                 'error': 'Insufficient credits',
                 'message': 'Your credits are used up 💛'
@@ -746,7 +750,16 @@ def get_response(current_user):
             _save_message(session_id, 'user', user_message)
             _save_message(session_id, 'ai', response_text)
 
-        return jsonify({'therapistResponse': response_text})
+        # ── DEDUCT CREDIT (Only for non-Pro) ──
+        # We deduct here because the response was successfully generated.
+        if not current_user.is_pro:
+            current_user.credits = max(0, current_user.credits - 1)
+            db.session.commit()
+
+        return jsonify({
+            'therapistResponse': response_text,
+            'remainingCredits': current_user.credits
+        })
 
     except Exception as e:
         print(f"Error calling Groq API: {e}")
@@ -785,7 +798,7 @@ def text_to_speech():
 
 # ============== START SERVER ==============
 
-if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', 5000))
+    print(f"Server is running on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=True)
