@@ -318,8 +318,7 @@ class EmotionDetector {
     ctx.lineWidth = 3;
     ctx.strokeRect(face.x, face.y, face.width, face.height);
 
-    // Draw bounding box only, no text labels
-    ctx.restore();
+    // Bounding box only - labels removed as requested
 
     return {
       x: face.x,
