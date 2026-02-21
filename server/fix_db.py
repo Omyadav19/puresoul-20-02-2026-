@@ -13,11 +13,11 @@ def migrate():
             # Add credits if missing or update default
             if 'credits' not in columns:
                 print("Adding 'credits' column...")
-                db.session.execute(text("ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 15"))
+                db.session.execute(text("ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 12"))
             else:
-                print("Updating 'credits' default to 15...")
+                print("Updating 'credits' default to 12...")
                 # Note: MySQL syntax for altering default
-                db.session.execute(text("ALTER TABLE users ALTER COLUMN credits SET DEFAULT 15"))
+                db.session.execute(text("ALTER TABLE users ALTER COLUMN credits SET DEFAULT 12"))
             
             # Rename total_credits_earned to total_credits_purchased if needed
             if 'total_credits_earned' in columns and 'total_credits_purchased' not in columns:
