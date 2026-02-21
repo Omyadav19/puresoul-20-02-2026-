@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCredits } from '../context/CreditContext';
 import { useApp } from '../context/AppContext';
 
-const BASE_URL = 'https://puresoul-2026.onrender.com';
+const BASE_URL = 'http://localhost:5000';
 
 const PRO_FEATURES = [
     { icon: History, title: 'Unlimited Session History', desc: 'Every conversation saved forever' },
