@@ -1,463 +1,363 @@
-import * as tf from '@tensorflow/tfjs';
-import '@tensorflow/tfjs-backend-webgl';
-import '@tensorflow/tfjs-backend-cpu';
+import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 
 class MediaPipeEmotionDetector {
-    constructor() {
-        this.model = null;
-        this.isInitialized = false;
-        this.emotions = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'];
-        this.modelUrl = 'https://raw.githubusercontent.com/oarriaga/face_classification/master/trained_models/emotion_models/fer2013_mini_XCEPTION.102-0.66.hdf5';
+  constructor() {
+    this.faceLandmarker = null;
+    this.isInitialized = false;
+    this.isLoading = false;
+    
+    // Emotion mapping from MediaPipe blendshapes to standard emotions
+    this.emotionMapping = {
+      // Happy emotions
+      'mouthSmileLeft': 'happy',
+      'mouthSmileRight': 'happy',
+      'cheekSquintLeft': 'happy',
+      'cheekSquintRight': 'happy',
+      
+      // Sad emotions
+      'mouthFrownLeft': 'sad',
+      'mouthFrownRight': 'sad',
+      'browDownLeft': 'sad',
+      'browDownRight': 'sad',
+      
+      // Angry emotions
+      'browLowererLeft': 'angry',
+      'browLowererRight': 'angry',
+      'eyeSquintLeft': 'angry',
+      'eyeSquintRight': 'angry',
+      
+      // Surprised emotions
+      'browInnerUp': 'surprised',
+      'eyeWideLeft': 'surprised',
+      'eyeWideRight': 'surprised',
+      'jawOpen': 'surprised',
+      
+      // Fear emotions
+      'eyeWideLeft': 'fear',
+      'eyeWideRight': 'fear',
+      'browInnerUp': 'fear',
+      
+      // Disgust emotions
+      'noseSneerLeft': 'disgust',
+      'noseSneerRight': 'disgust',
+      'mouthUpperUpLeft': 'disgust',
+      'mouthUpperUpRight': 'disgust',
+    };
+    
+    this.emotions = ['neutral', 'happy', 'sad', 'angry', 'surprised', 'fear', 'disgust'];
+  }
+
+  async initialize() {
+    if (this.isInitialized || this.isLoading) {
+      return this.isInitialized;
     }
 
-    async initialize() {
-        try {
-            console.log('Initializing TensorFlow.js...');
+    this.isLoading = true;
+    
+    try {
+      console.log('Initializing MediaPipe Face Landmarker...');
+      
+      // Initialize MediaPipe
+      const vision = await FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+      );
+      
+      // Create Face Landmarker with blendshapes
+      this.faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+          delegate: 'GPU'
+        },
+        outputFaceBlendshapes: true,
+        outputFacialTransformationMatrixes: true,
+        runningMode: 'VIDEO',
+        numFaces: 1
+      });
+      
+      this.isInitialized = true;
+      console.log('MediaPipe Face Landmarker initialized successfully');
+      return true;
+      
+    } catch (error) {
+      console.error('Failed to initialize MediaPipe Face Landmarker:', error);
+      this.isInitialized = false;
+      return false;
+    } finally {
+      this.isLoading = false;
+    }
+  }
 
-            // Set backend preference
-            await tf.setBackend('webgl');
-            await tf.ready();
-
-            console.log('TensorFlow.js backend:', tf.getBackend());
-            console.log('Loading emotion recognition model...');
-
-            // Create a more sophisticated emotion detection model
-            this.model = await this.createEmotionModel();
-
-            this.isInitialized = true;
-            console.log('Emotion detector initialized successfully');
-
-            return true;
-        } catch (error) {
-            console.error('Failed to initialize emotion detector:', error);
-            // Fallback to CPU backend
-            try {
-                await tf.setBackend('cpu');
-                await tf.ready();
-                this.model = await this.createEmotionModel();
-                this.isInitialized = true;
-                console.log('Emotion detector initialized with CPU backend');
-                return true;
-            } catch (cpuError) {
-                console.error('Failed to initialize with CPU backend:', cpuError);
-                return false;
-            }
-        }
+  analyzeBlendshapes(blendshapes) {
+    if (!blendshapes || blendshapes.length === 0) {
+      return { emotion: 'neutral', confidence: 0.5, allScores: {} };
     }
 
-    async createEmotionModel() {
-        // Create a more realistic CNN model for emotion recognition
-        const model = tf.sequential({
-            layers: [
-                // First convolutional block
-                tf.layers.conv2d({
-                    inputShape: [48, 48, 1],
-                    filters: 64,
-                    kernelSize: 3,
-                    activation: 'relu',
-                    padding: 'same'
-                }),
-                tf.layers.batchNormalization(),
-                tf.layers.conv2d({
-                    filters: 64,
-                    kernelSize: 3,
-                    activation: 'relu',
-                    padding: 'same'
-                }),
-                tf.layers.maxPooling2d({ poolSize: 2, strides: 2 }),
-                tf.layers.dropout({ rate: 0.25 }),
+    // Initialize emotion scores
+    const emotionScores = {
+      neutral: 0.3, // Base neutral score
+      happy: 0,
+      sad: 0,
+      angry: 0,
+      surprised: 0,
+      fear: 0,
+      disgust: 0
+    };
 
-                // Second convolutional block
-                tf.layers.conv2d({
-                    filters: 128,
-                    kernelSize: 3,
-                    activation: 'relu',
-                    padding: 'same'
-                }),
-                tf.layers.batchNormalization(),
-                tf.layers.conv2d({
-                    filters: 128,
-                    kernelSize: 3,
-                    activation: 'relu',
-                    padding: 'same'
-                }),
-                tf.layers.maxPooling2d({ poolSize: 2, strides: 2 }),
-                tf.layers.dropout({ rate: 0.25 }),
+    // Analyze blendshapes and map to emotions
+    blendshapes.forEach(blendshape => {
+      const shapeName = blendshape.categoryName;
+      const score = blendshape.score;
+      
+      if (this.emotionMapping[shapeName]) {
+        const emotion = this.emotionMapping[shapeName];
+        emotionScores[emotion] += score;
+      }
+    });
 
-                // Third convolutional block
-                tf.layers.conv2d({
-                    filters: 256,
-                    kernelSize: 3,
-                    activation: 'relu',
-                    padding: 'same'
-                }),
-                tf.layers.batchNormalization(),
-                tf.layers.conv2d({
-                    filters: 256,
-                    kernelSize: 3,
-                    activation: 'relu',
-                    padding: 'same'
-                }),
-                tf.layers.maxPooling2d({ poolSize: 2, strides: 2 }),
-                tf.layers.dropout({ rate: 0.25 }),
+    // Apply emotion-specific logic
+    this.applyEmotionLogic(emotionScores, blendshapes);
 
-                // Dense layers
-                tf.layers.flatten(),
-                tf.layers.dense({
-                    units: 512,
-                    activation: 'relu'
-                }),
-                tf.layers.dropout({ rate: 0.5 }),
-                tf.layers.dense({
-                    units: 256,
-                    activation: 'relu'
-                }),
-                tf.layers.dropout({ rate: 0.5 }),
-                tf.layers.dense({
-                    units: 7, // 7 emotions
-                    activation: 'softmax'
-                })
-            ]
-        });
+    // Find dominant emotion
+    let dominantEmotion = 'neutral';
+    let maxScore = emotionScores.neutral;
+    
+    Object.entries(emotionScores).forEach(([emotion, score]) => {
+      if (score > maxScore) {
+        maxScore = score;
+        dominantEmotion = emotion;
+      }
+    });
 
-        // Compile the model
-        model.compile({
-            optimizer: tf.train.adam(0.001),
-            loss: 'categoricalCrossentropy',
-            metrics: ['accuracy']
-        });
+    // Normalize confidence (0-1 range)
+    const confidence = Math.min(1.0, Math.max(0.1, maxScore));
 
-        // Initialize with better weights using Xavier initialization
-        const weights = [];
-        for (let layer of model.layers) {
-            if (layer.getWeights().length > 0) {
-                const layerWeights = layer.getWeights().map(weight => {
-                    const shape = weight.shape;
-                    const fanIn = shape.length > 1 ? shape[shape.length - 2] : shape[0];
-                    const fanOut = shape[shape.length - 1];
-                    const limit = Math.sqrt(6.0 / (fanIn + fanOut));
-                    return tf.randomUniform(shape, -limit, limit);
-                });
-                weights.push(...layerWeights);
-            }
-        }
+    return {
+      emotion: dominantEmotion,
+      confidence: confidence,
+      allScores: emotionScores
+    };
+  }
 
-        return model;
+  applyEmotionLogic(emotionScores, blendshapes) {
+    // Get specific blendshape values
+    const getBlendshapeScore = (name) => {
+      const blendshape = blendshapes.find(b => b.categoryName === name);
+      return blendshape ? blendshape.score : 0;
+    };
+
+    // Happy detection logic
+    const smileLeft = getBlendshapeScore('mouthSmileLeft');
+    const smileRight = getBlendshapeScore('mouthSmileRight');
+    const cheekRaise = (getBlendshapeScore('cheekSquintLeft') + getBlendshapeScore('cheekSquintRight')) / 2;
+    
+    if (smileLeft > 0.3 || smileRight > 0.3) {
+      emotionScores.happy += 0.4;
+      if (cheekRaise > 0.2) {
+        emotionScores.happy += 0.3; // Genuine smile (Duchenne)
+      }
     }
 
-    async detectFaces(videoElement) {
-        return new Promise((resolve) => {
-            // Use a more robust face detection approach
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-
-            canvas.width = videoElement.videoWidth;
-            canvas.height = videoElement.videoHeight;
-
-            ctx.drawImage(videoElement, 0, 0);
-
-            // Simple face detection using Viola-Jones-like approach
-            // In a real implementation, you'd use opencv.js or face-api.js
-            const faces = this.detectFacesSimple(canvas);
-            resolve(faces);
-        });
+    // Sad detection logic
+    const frownLeft = getBlendshapeScore('mouthFrownLeft');
+    const frownRight = getBlendshapeScore('mouthFrownRight');
+    const browDown = (getBlendshapeScore('browDownLeft') + getBlendshapeScore('browDownRight')) / 2;
+    
+    if (frownLeft > 0.2 || frownRight > 0.2) {
+      emotionScores.sad += 0.4;
+      if (browDown > 0.2) {
+        emotionScores.sad += 0.3;
+      }
     }
 
-    detectFacesSimple(canvas) {
-        const ctx = canvas.getContext('2d');
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-
-        // Simple face detection based on skin color and facial features
-        const faces = [];
-        const width = canvas.width;
-        const height = canvas.height;
-
-        // Scan for face-like regions
-        for (let y = 0; y < height - 100; y += 20) {
-            for (let x = 0; x < width - 100; x += 20) {
-                const faceScore = this.calculateFaceScore(data, x, y, width, height);
-
-                if (faceScore > 0.3) {
-                    // Estimate face bounds
-                    const faceWidth = Math.min(150, width - x);
-                    const faceHeight = Math.min(150, height - y);
-
-                    faces.push({
-                        x: x,
-                        y: y,
-                        width: faceWidth,
-                        height: faceHeight,
-                        confidence: faceScore
-                    });
-
-                    // Only detect one face for simplicity
-                    break;
-                }
-            }
-            if (faces.length > 0) break;
-        }
-
-        // If no faces detected using simple method, assume center face
-        if (faces.length === 0) {
-            const centerX = Math.max(0, (width - 150) / 2);
-            const centerY = Math.max(0, (height - 150) / 2);
-            faces.push({
-                x: centerX,
-                y: centerY,
-                width: Math.min(150, width),
-                height: Math.min(150, height),
-                confidence: 0.5
-            });
-        }
-
-        return faces;
+    // Angry detection logic
+    const browLowerer = (getBlendshapeScore('browLowererLeft') + getBlendshapeScore('browLowererRight')) / 2;
+    const eyeSquint = (getBlendshapeScore('eyeSquintLeft') + getBlendshapeScore('eyeSquintRight')) / 2;
+    
+    if (browLowerer > 0.3) {
+      emotionScores.angry += 0.4;
+      if (eyeSquint > 0.2) {
+        emotionScores.angry += 0.3;
+      }
     }
 
-    calculateFaceScore(data, x, y, width, height) {
-        let skinPixels = 0;
-        let totalPixels = 0;
-
-        // Sample pixels in the region
-        for (let dy = 0; dy < 100 && y + dy < height; dy += 5) {
-            for (let dx = 0; dx < 100 && x + dx < width; dx += 5) {
-                const idx = ((y + dy) * width + (x + dx)) * 4;
-                const r = data[idx];
-                const g = data[idx + 1];
-                const b = data[idx + 2];
-
-                // Simple skin color detection
-                if (this.isSkinColor(r, g, b)) {
-                    skinPixels++;
-                }
-                totalPixels++;
-            }
-        }
-
-        return totalPixels > 0 ? skinPixels / totalPixels : 0;
+    // Surprised detection logic
+    const browInnerUp = getBlendshapeScore('browInnerUp');
+    const eyeWide = (getBlendshapeScore('eyeWideLeft') + getBlendshapeScore('eyeWideRight')) / 2;
+    const jawOpen = getBlendshapeScore('jawOpen');
+    
+    if (browInnerUp > 0.3 && eyeWide > 0.3) {
+      emotionScores.surprised += 0.5;
+      if (jawOpen > 0.2) {
+        emotionScores.surprised += 0.3;
+      }
     }
 
-    isSkinColor(r, g, b) {
-        // Simple skin color detection
-        return (r > 95 && g > 40 && b > 20 &&
-            Math.max(r, g, b) - Math.min(r, g, b) > 15 &&
-            Math.abs(r - g) > 15 && r > g && r > b);
+    // Fear detection logic (similar to surprise but with different intensity)
+    if (browInnerUp > 0.4 && eyeWide > 0.4 && jawOpen < 0.1) {
+      emotionScores.fear += 0.4;
     }
 
-    preprocessFace(canvas, face) {
-        // Extract and preprocess face region
-        const faceCanvas = document.createElement('canvas');
-        faceCanvas.width = 48;
-        faceCanvas.height = 48;
-        const faceCtx = faceCanvas.getContext('2d');
-
-        // Draw face region
-        faceCtx.drawImage(
-            canvas,
-            face.x, face.y, face.width, face.height,
-            0, 0, 48, 48
-        );
-
-        // Convert to grayscale and normalize
-        const imageData = faceCtx.getImageData(0, 0, 48, 48);
-        const grayscale = new Float32Array(48 * 48);
-
-        for (let i = 0; i < imageData.data.length; i += 4) {
-            const gray = (imageData.data[i] * 0.299 +
-                imageData.data[i + 1] * 0.587 +
-                imageData.data[i + 2] * 0.114) / 255.0;
-            grayscale[i / 4] = gray;
-        }
-
-        return tf.tensor4d(grayscale, [1, 48, 48, 1]);
+    // Disgust detection logic
+    const noseSneer = (getBlendshapeScore('noseSneerLeft') + getBlendshapeScore('noseSneerRight')) / 2;
+    const upperLipRaise = (getBlendshapeScore('mouthUpperUpLeft') + getBlendshapeScore('mouthUpperUpRight')) / 2;
+    
+    if (noseSneer > 0.3 || upperLipRaise > 0.3) {
+      emotionScores.disgust += 0.4;
     }
 
-    async predictEmotion(faceImage) {
-        if (!this.model || !faceImage) {
-            return null;
-        }
+    // Reduce neutral score if any strong emotion is detected
+    const maxEmotionScore = Math.max(
+      emotionScores.happy, emotionScores.sad, emotionScores.angry,
+      emotionScores.surprised, emotionScores.fear, emotionScores.disgust
+    );
+    
+    if (maxEmotionScore > 0.3) {
+      emotionScores.neutral = Math.max(0.1, emotionScores.neutral - maxEmotionScore);
+    }
+  }
 
-        try {
-            // Get prediction from model
-            const prediction = this.model.predict(faceImage);
-            const probabilities = await prediction.data();
-
-            // Clean up tensors
-            prediction.dispose();
-
-            // Find the emotion with highest probability
-            let maxIndex = 0;
-            let maxProb = probabilities[0];
-
-            for (let i = 1; i < probabilities.length; i++) {
-                if (probabilities[i] > maxProb) {
-                    maxProb = probabilities[i];
-                    maxIndex = i;
-                }
-            }
-
-            // Add some noise to make it more realistic
-            const confidence = Math.min(0.95, maxProb + Math.random() * 0.1);
-
-            return {
-                emotion: this.emotions[maxIndex],
-                confidence: confidence,
-                probabilities: Array.from(probabilities)
-            };
-        } catch (error) {
-            console.error('Emotion prediction error:', error);
-            return null;
-        }
+  async detectEmotionFromVideo(videoElement, canvasElement) {
+    if (!this.isInitialized || !this.faceLandmarker) {
+      console.warn('MediaPipe Face Landmarker not initialized');
+      return null;
     }
 
-    drawFaceBox(canvas, face, emotion, confidence) {
-        const ctx = canvas.getContext('2d');
+    if (!videoElement || videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+      return null;
+    }
 
-        // Draw face bounding box
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(face.x, face.y, face.width, face.height);
+    try {
+      // Set canvas size to match video
+      canvasElement.width = videoElement.videoWidth;
+      canvasElement.height = videoElement.videoHeight;
+      
+      const ctx = canvasElement.getContext('2d');
+      ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      
+      // Detect faces and blendshapes
+      const results = this.faceLandmarker.detectForVideo(videoElement, performance.now());
+      
+      if (!results.faceBlendshapes || results.faceBlendshapes.length === 0) {
+        return null;
+      }
 
-        // --- FIXED OVERLAY LOGIC (Mirror compensated) ---
-        const labelWidth = 220;
-        const labelHeight = 70;
+      // Analyze the first face's blendshapes
+      const blendshapes = results.faceBlendshapes[0].categories;
+      const emotionResult = this.analyzeBlendshapes(blendshapes);
+      
+      // Draw face landmarks if available
+      if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+        this.drawFaceLandmarks(ctx, results.faceLandmarks[0], canvasElement.width, canvasElement.height);
+      }
+      
+      // Draw emotion result
+      this.drawEmotionResult(ctx, emotionResult, canvasElement.width, canvasElement.height);
 
-        // Find a good position for the label (usually above the head)
-        let labelX = face.x;
-        let labelY = face.y - labelHeight - 10;
+      return {
+        emotion: emotionResult.emotion,
+        confidence: emotionResult.confidence,
+        allScores: emotionResult.allScores,
+        blendshapes: blendshapes,
+        timestamp: new Date()
+      };
+      
+    } catch (error) {
+      console.error('MediaPipe emotion detection error:', error);
+      return null;
+    }
+  }
 
-        // Keep within canvas bounds
-        if (labelY < 0) labelY = face.y + face.height + 10;
-
-        ctx.save();
-
-        // IMPORTANT: Because the canvas is mirrored horizontally via CSS (scale-x-[-1]),
-        // everything we draw is reversed. We need to flip the coordinate system 
-        // back specifically for this label box to make text readable.
-        ctx.translate(labelX + labelWidth, labelY);
-        ctx.scale(-1, 1);
-
-        // Draw Background Box
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+  drawFaceLandmarks(ctx, landmarks, width, height) {
+    ctx.fillStyle = '#00ff00';
+    ctx.strokeStyle = '#00ff00';
+    ctx.lineWidth = 1;
+    
+    // Draw key facial landmarks
+    landmarks.forEach((landmark, index) => {
+      const x = landmark.x * width;
+      const y = landmark.y * height;
+      
+      // Draw landmark points (only key points to avoid clutter)
+      if (index % 5 === 0) {
         ctx.beginPath();
-        const r = 12; // corner radius
-        ctx.moveTo(r, 0);
-        ctx.lineTo(labelWidth - r, 0);
-        ctx.quadraticCurveTo(labelWidth, 0, labelWidth, r);
-        ctx.lineTo(labelWidth, labelHeight - r);
-        ctx.quadraticCurveTo(labelWidth, labelHeight, labelWidth - r, labelHeight);
-        ctx.lineTo(r, labelHeight);
-        ctx.quadraticCurveTo(0, labelHeight, 0, labelHeight - r);
-        ctx.lineTo(0, r);
-        ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.arc(x, y, 1, 0, 2 * Math.PI);
         ctx.fill();
-
-        // Draw Emotion Emoji
-        const emojis = {
-            angry: '😠',
-            disgust: '🤢',
-            fear: '😨',
-            happy: '😊',
-            neutral: '😐',
-            sad: '😢',
-            surprise: '😲'
-        };
-        ctx.font = '32px Arial';
-        ctx.fillText(emojis[emotion] || '😐', 15, 45);
-
-        // Draw Emotion Text
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 15px Arial';
-        ctx.fillText(`Emotion: ${emotion.toUpperCase()}`, 60, 28);
-
-        // Draw Confidence Text
-        ctx.font = '12px Arial';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.fillText(`Confidence: ${Math.round(confidence * 100)}%`, 60, 48);
-
-        // Draw Progress Bar
-        const barWidth = 140;
-        const barHeight = 6;
-        const barX = 60;
-        const barY = 55;
-
-        // Bar background
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.fillRect(barX, barY, barWidth, barHeight);
-
-        // Bar fill (Green)
-        ctx.fillStyle = '#00ff00';
-        ctx.fillRect(barX, barY, barWidth * confidence, barHeight);
-
-        ctx.restore();
-
-        return {
-            x: face.x,
-            y: face.y,
-            width: face.width,
-            height: face.height
-        };
-    }
-
-    async detectEmotionFromVideo(videoElement, canvasElement) {
-        if (!this.isInitialized) {
-            console.warn('Emotion detector not initialized');
-            return null;
+      }
+    });
+    
+    // Draw face outline (approximate)
+    if (landmarks.length > 0) {
+      const faceOutline = [
+        10, 151, 9, 8, 168, 6, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109
+      ];
+      
+      ctx.beginPath();
+      faceOutline.forEach((index, i) => {
+        if (landmarks[index]) {
+          const x = landmarks[index].x * width;
+          const y = landmarks[index].y * height;
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
         }
-
-        try {
-            // Set canvas size to match video
-            canvasElement.width = videoElement.videoWidth;
-            canvasElement.height = videoElement.videoHeight;
-
-            const ctx = canvasElement.getContext('2d');
-            ctx.drawImage(videoElement, 0, 0);
-
-            // Detect faces
-            const faces = await this.detectFaces(videoElement);
-
-            if (faces.length === 0) {
-                return null;
-            }
-
-            // Process the first detected face
-            const face = faces[0];
-
-            // Preprocess face for emotion recognition
-            const faceImage = this.preprocessFace(canvasElement, face);
-
-            // Predict emotion
-            const emotionResult = await this.predictEmotion(faceImage);
-
-            // Clean up tensor
-            faceImage.dispose();
-
-            if (!emotionResult) {
-                return null;
-            }
-
-            // Draw face box and emotion on canvas
-            const faceBox = this.drawFaceBox(canvasElement, face, emotionResult.emotion, emotionResult.confidence);
-
-            return {
-                emotion: emotionResult.emotion,
-                confidence: emotionResult.confidence,
-                probabilities: emotionResult.probabilities,
-                faceBox: faceBox,
-                timestamp: new Date()
-            };
-        } catch (error) {
-            console.error('Emotion detection error:', error);
-            return null;
-        }
+      });
+      ctx.stroke();
     }
+  }
 
-    dispose() {
-        if (this.model) {
-            this.model.dispose();
-        }
-        this.isInitialized = false;
+  drawEmotionResult(ctx, emotionResult, width, height) {
+    // Draw emotion label background
+    const labelWidth = 250;
+    const labelHeight = 80;
+    const x = 20;
+    const y = 20;
+    
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(x, y, labelWidth, labelHeight);
+    
+    // Draw emotion text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 18px Arial';
+    ctx.fillText(`Emotion: ${emotionResult.emotion.toUpperCase()}`, x + 10, y + 25);
+    
+    ctx.font = '14px Arial';
+    ctx.fillText(`Confidence: ${Math.round(emotionResult.confidence * 100)}%`, x + 10, y + 45);
+    
+    // Draw confidence bar
+    const barWidth = 200;
+    const barHeight = 8;
+    const barX = x + 10;
+    const barY = y + 55;
+    
+    ctx.fillStyle = '#333';
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+    
+    ctx.fillStyle = '#00ff00';
+    ctx.fillRect(barX, barY, barWidth * emotionResult.confidence, barHeight);
+    
+    // Draw emotion emoji
+    ctx.font = '24px Arial';
+    const emojis = {
+      neutral: '😐',
+      happy: '😊',
+      sad: '😢',
+      angry: '😠',
+      surprised: '😲',
+      fear: '😨',
+      disgust: '🤢'
+    };
+    ctx.fillText(emojis[emotionResult.emotion] || '😐', x + labelWidth - 40, y + 35);
+  }
+
+  dispose() {
+    if (this.faceLandmarker) {
+      this.faceLandmarker.close();
+      this.faceLandmarker = null;
     }
+    this.isInitialized = false;
+  }
 }
 
 export default MediaPipeEmotionDetector;
