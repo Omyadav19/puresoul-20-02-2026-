@@ -28,7 +28,7 @@ export const CreditProvider = ({ children }) => {
         setIsLoading(true);
         try {
             const token = localStorage.getItem('authToken');
-            const response = await fetch('http://localhost:5000/api/credits', {
+            const response = await fetch('https://puresoul-2026.onrender.com/api/credits', {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -48,7 +48,7 @@ export const CreditProvider = ({ children }) => {
         if (!user) return;
         try {
             const token = localStorage.getItem('authToken');
-            const response = await fetch('http://localhost:5000/api/credits/use', {
+            const response = await fetch('https://puresoul-2026.onrender.com/api/credits/use', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -70,7 +70,7 @@ export const CreditProvider = ({ children }) => {
         if (!user) return;
         try {
             const token = localStorage.getItem('authToken');
-            const response = await fetch('http://localhost:5000/api/credits/buy', {
+            const response = await fetch('https://puresoul-2026.onrender.com/api/credits/buy', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
