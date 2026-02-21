@@ -318,78 +318,8 @@ class MediaPipeEmotionDetector {
         ctx.lineWidth = 3;
         ctx.strokeRect(face.x, face.y, face.width, face.height);
 
-        // --- FIXED OVERLAY LOGIC (Mirror compensated) ---
-        const labelWidth = 220;
-        const labelHeight = 70;
-        
-        // Find a good position for the label (usually above the head)
-        let labelX = face.x;
-        let labelY = face.y - labelHeight - 10;
-        
-        // Keep within canvas bounds
-        if (labelY < 0) labelY = face.y + face.height + 10;
-
-        ctx.save();
-        
-        // IMPORTANT: Because the canvas is mirrored horizontally via CSS (scale-x-[-1]),
-        // everything we draw is reversed. We need to flip the coordinate system 
-        // back specifically for this label box to make text readable.
-        ctx.translate(labelX + labelWidth, labelY);
-        ctx.scale(-1, 1);
-
-        // Draw Background Box
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-        ctx.beginPath();
-        const r = 12; // corner radius
-        ctx.moveTo(r, 0);
-        ctx.lineTo(labelWidth - r, 0);
-        ctx.quadraticCurveTo(labelWidth, 0, labelWidth, r);
-        ctx.lineTo(labelWidth, labelHeight - r);
-        ctx.quadraticCurveTo(labelWidth, labelHeight, labelWidth - r, labelHeight);
-        ctx.lineTo(r, labelHeight);
-        ctx.quadraticCurveTo(0, labelHeight, 0, labelHeight - r);
-        ctx.lineTo(0, r);
-        ctx.quadraticCurveTo(0, 0, r, 0);
-        ctx.fill();
-
-        // Draw Emotion Emoji
-        const emojis = {
-            angry: '😠',
-            disgust: '🤢',
-            fear: '😨',
-            happy: '😊',
-            neutral: '😐',
-            sad: '😢',
-            surprise: '😲'
-        };
-        ctx.font = '32px Arial';
-        ctx.fillText(emojis[emotion] || '😐', 15, 45);
-
-        // Draw Emotion Text
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 15px Arial';
-        ctx.fillText(`Emotion: ${emotion.toUpperCase()}`, 60, 28);
-
-        // Draw Confidence Text
-        ctx.font = '12px Arial';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.fillText(`Confidence: ${Math.round(confidence * 100)}%`, 60, 48);
-
-        // Draw Progress Bar
-        const barWidth = 140;
-        const barHeight = 6;
-        const barX = 60;
-        const barY = 55;
-
-        // Bar background
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.fillRect(barX, barY, barWidth, barHeight);
-
-        // Bar fill (Green)
-        ctx.fillStyle = '#00ff00';
-        ctx.fillRect(barX, barY, barWidth * confidence, barHeight);
-
-        ctx.restore();
+        // Draw bounding box only, no text labels as requested
+        // ctx.restore(); // Not needed if we don't save
 
         return {
             x: face.x,
