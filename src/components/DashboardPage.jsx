@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import { useCredits } from '../context/CreditContext.jsx';
 
-const BASE_URL = 'http://localhost:5000';
+const BASE_URL = 'https://puresoul-2026.onrender.com';
 
 const EMOTION_COLORS = {
   happy: '#34d399',
