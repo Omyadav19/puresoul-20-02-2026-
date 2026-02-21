@@ -318,54 +318,7 @@ class EmotionDetector {
     ctx.lineWidth = 3;
     ctx.strokeRect(face.x, face.y, face.width, face.height);
 
-    // --- FIX MIRRORED TEXT & EMOJI ---
-    // The video/canvas is flipped horizontally via scaleX(-1). 
-    // To make text and emojis readable, we must flip the context back for this section.
-    ctx.save();
-
-    const labelWidth = 180;
-    const labelHeight = 60;
-
-    // Position label above the box
-    // We adjust the anchor point because we're about to flip the coordinates
-    ctx.translate(face.x, face.y - labelHeight);
-    ctx.scale(-1, 1);
-    // Since we scaled by -1, we're now drawing from the right-hand side of the previous face.x
-    // We need to shift everything back so it fits 'inside' the intended width
-    ctx.translate(-labelWidth, 0);
-
-    // Draw label background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-    // Draw a rounded rectangle manually for compatibility
-    const r = 10;
-    ctx.beginPath();
-    ctx.roundRect(0, 0, labelWidth, labelHeight, r);
-    ctx.fill();
-
-    // Draw emotion emoji
-    ctx.font = '28px Arial';
-    const emojis = {
-      angry: '😠',
-      disgust: '🤢',
-      fear: '😨',
-      happy: '😊',
-      neutral: '😐',
-      sad: '😢',
-      surprise: '😲'
-    };
-    const emoji = emojis[emotion] || '😐';
-    ctx.fillText(emoji, 10, 40);
-
-    // Draw emotion text
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 14px Arial';
-    ctx.fillText(emotion.toUpperCase(), 45, 25);
-
-    // Draw confidence text
-    ctx.font = '10px Arial';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.fillText(`${Math.round(confidence * 100)}% Confident`, 45, 45);
-
+    // Draw bounding box only, no text labels
     ctx.restore();
 
     return {
