@@ -551,7 +551,7 @@ const EmotionDetectionPage = () => {
                         onLoadedMetadata={(e) => console.log('Video metadata loaded', e)}
                         onError={(e) => console.error('Video tag error', e)}
                       />
-                      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none transform scale-x-[-1]" />
+                      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
 
                       {/* Tech Overlay Elements */}
