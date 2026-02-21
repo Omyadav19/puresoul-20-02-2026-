@@ -237,6 +237,9 @@ const TherapySessionPage = () => {
         if (!user) { navigate('/login'); return; }
 
         const initSession = async () => {
+            // Always refresh credits on mount to catch any purchases
+            refreshCredits();
+
             if (user.is_pro) {
                 try {
                     const data = await createSession(category);
