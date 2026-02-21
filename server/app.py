@@ -377,6 +377,7 @@ def get_credits(current_user):
     return jsonify({
         'username': current_user.username,
         'credits': current_user.credits,
+        'total_credits_purchased': current_user.total_credits_purchased,
         'is_pro': current_user.is_pro
     }), 200
 
@@ -399,6 +400,7 @@ def use_credit(current_user):
         'success': True,
         'message': 'Credit deducted',
         'credits': current_user.credits
+        'total_credits_purchased': current_user.total_credits_purchased
     }), 200
 
 
@@ -445,6 +447,7 @@ def buy_credits_v2(current_user):
     return jsonify({
         'message': f'Successfully purchased {amount} credits!',
         'credits': current_user.credits
+        'total_credits_purchased': current_user.total_credits_purchased
     }), 200
 
 
