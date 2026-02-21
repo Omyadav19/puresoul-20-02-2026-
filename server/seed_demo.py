@@ -14,13 +14,13 @@ with app.app_context():
             email="demo@example.com",
             username="demo",
             password=hashed_password.decode('utf-8'),
-            credits=12
+            credits=15
         )
         db.session.add(demo)
         db.session.commit()
         print("Demo user created with username 'demo' and password 'password'")
     else:
         print("Demo user already exists.")
-        # Ensure credits are 12
-        demo_user.credits = 12
+        # Ensure credits are 15
+        demo_user.credits = 15
         db.session.commit()
