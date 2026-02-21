@@ -4,7 +4,7 @@ import { Ticket } from 'lucide-react';
 import { useCredits } from '../../context/CreditContext';
 
 const CreditBadge = () => {
-    const { credits } = useCredits();
+    const { credits, totalCreditsPurchased } = useCredits();
     const [prevCredits, setPrevCredits] = useState(credits);
     const [isAnimating, setIsAnimating] = useState(false);
 
@@ -44,7 +44,7 @@ const CreditBadge = () => {
                             {credits}
                         </motion.span>
                     </AnimatePresence>
-                    <span className="text-xs text-white/40 font-medium">/ 12</span>
+                    <span className="text-xs text-white/40 font-medium">/ {12 + (totalCreditsPurchased || 0)}</span>
                 </div>
             </div>
 
