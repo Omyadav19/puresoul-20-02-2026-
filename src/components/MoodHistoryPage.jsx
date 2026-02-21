@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import { useCredits } from '../context/CreditContext';
 
-const BASE_URL = 'https://puresoul-2026.onrender.com/';
+const BASE_URL = 'https://puresoul-2026.onrender.com';
 
 const EMOTION_COLORS_TEXT = {
   happy: 'text-emerald-400',
