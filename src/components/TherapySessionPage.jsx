@@ -15,6 +15,7 @@ import CreditPopup from './CreditSystem/CreditPopup';
 import ProSessionsSidebar from './ProSessionsSidebar.jsx';
 import ProUpgradeBanner from './ProUpgradeBanner.jsx';
 import { createSession, endSession, fetchSessionMessages } from '../utils/proApi';
+import { API_BASE_URL } from '../utils/apiConfig';
 
 // ─── TTS Queue ────────────────────────────────────────────────────────────────
 class TTSQueue {
@@ -62,7 +63,7 @@ class TTSQueue {
 const fetchTTSAudioArrayBuffer = async (text) => {
     if (!text || !text.trim()) return null;
     try {
-        const resp = await fetch('http://localhost:5000/api/text-to-speech', {
+        const resp = await fetch(`${API_BASE_URL}/api/text-to-speech`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text }),
@@ -294,7 +295,7 @@ const TherapySessionPage = () => {
     const getTherapeuticResponse = async (userMessage, messageHistory) => {
         try {
             const token = localStorage.getItem('authToken');
-            const response = await fetch('http://localhost:5000/api/get-response', {
+            const response = await fetch(`${API_BASE_URL}/api/get-response`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -315,6 +316,10 @@ const TherapySessionPage = () => {
 
             if (!response.ok) throw new Error('Network response was not ok');
             const data = await response.json();
+
+            // Refresh credits in background to update the header
+            refreshCredits();
+
             return data.therapistResponse;
         } catch (error) {
             return "Main thoda connection error face kar raha hoon, but main sun raha hoon. Please continue.";
@@ -323,13 +328,15 @@ const TherapySessionPage = () => {
 
     // ── Send message ──
     const handleSendMessage = async () => {
-        if (!inputMessage.trim() || credits <= 0) {
-            if (credits <= 0) setShowCreditPopup(true);
+        if (!inputMessage.trim()) return;
+
+        const isPro = user?.is_pro;
+
+        // If not Pro and out of credits, show popup and stop
+        if (!isPro && credits <= 0) {
+            setShowCreditPopup(true);
             return;
         }
-
-        const success = await consumeCredit();
-        if (!success) { setShowCreditPopup(true); return; }
 
         const userMessage = {
             id: Date.now().toString(),
@@ -577,13 +584,13 @@ const TherapySessionPage = () => {
                             />
                             <motion.button
                                 onClick={handleSendMessage}
-                                whileHover={credits > 0 ? { scale: 1.05 } : {}}
-                                whileTap={credits > 0 ? { scale: 0.95 } : {}}
-                                disabled={!inputMessage.trim() || credits <= 0}
-                                className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${credits > 0
+                                whileHover={(isPro || credits > 0) ? { scale: 1.05 } : {}}
+                                whileTap={(isPro || credits > 0) ? { scale: 0.95 } : {}}
+                                disabled={!inputMessage.trim()}
+                                className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${(isPro || credits > 0)
                                     ? `${currentTheme.accent} text-white`
-                                    : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                                    } disabled:opacity-50`}
+                                    : 'bg-gray-700 text-gray-500'
+                                    } ${!inputMessage.trim() ? 'opacity-50' : ''}`}
                             >
                                 <Send className="w-6 h-6" />
                             </motion.button>
