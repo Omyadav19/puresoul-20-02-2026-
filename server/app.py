@@ -27,8 +27,12 @@ app = Flask(__name__)
 CORS(app)
 
 # Database Configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
+app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
+db_uri = os.getenv('SQLALCHEMY_DATABASE_URI')
+if db_uri and db_uri.startswith("postgres://"):
+    db_uri = db_uri.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 
 # Initialize Extensions
 db.init_app(app)
