@@ -188,7 +188,7 @@ const TherapySessionPage = () => {
     const currentTheme = themeConfigs[category] || themeConfigs['Mental Health'];
     const CategoryIcon = currentTheme.icon;
 
-    const { user, addTherapySession, setSadDetectionCount, theme, toggleTheme, logout } = useApp();
+    const { user, currentEmotion, addTherapySession, setSadDetectionCount, theme, toggleTheme, logout } = useApp();
     const { credits, consumeCredit, refreshCredits } = useCredits();
 
     // ── State ──
@@ -236,13 +236,14 @@ const TherapySessionPage = () => {
         if (!user) { navigate('/login'); return; }
 
         const initSession = async () => {
-            if (user.is_pro) {
-                try {
-                    const data = await createSession(category);
-                    if (data.session_id) setSessionId(data.session_id);
-                } catch (e) {
-                    console.warn('Could not create Pro session:', e);
-                }
+            // Always refresh credits on mount to catch any purchases
+            refreshCredits();
+
+            try {
+                const data = await createSession(category);
+                if (data.session_id) setSessionId(data.session_id);
+            } catch (e) {
+                console.warn('Could not create session:', e);
             }
         };
         initSession();
@@ -304,7 +305,8 @@ const TherapySessionPage = () => {
                     userMessage,
                     messageHistory: messageHistory.slice(-6),  // fallback for free users
                     category,
-                    session_id: sessionId,                     // Pro: backend loads from DB
+                    session_id: sessionId,                     // backend loads from DB
+                    emotion: currentEmotion?.emotion || null   // send current detected emotion
                 }),
             });
 
