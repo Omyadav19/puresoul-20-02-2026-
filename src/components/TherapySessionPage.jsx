@@ -62,7 +62,7 @@ class TTSQueue {
 const fetchTTSAudioArrayBuffer = async (text) => {
     if (!text || !text.trim()) return null;
     try {
-        const resp = await fetch('https://puresoul-2026.onrender.com/api/text-to-speech', {
+        const resp = await fetch('http://localhost:5000/api/text-to-speech', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text }),
@@ -184,7 +184,7 @@ const themeConfigs = {
 const TherapySessionPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { category = 'Mental Health' } = location.state || {};
+    const { category = 'Mental Health', initialEmotion } = location.state || {};
     const currentTheme = themeConfigs[category] || themeConfigs['Mental Health'];
     const CategoryIcon = currentTheme.icon;
 
@@ -236,13 +236,11 @@ const TherapySessionPage = () => {
         if (!user) { navigate('/login'); return; }
 
         const initSession = async () => {
-            if (user.is_pro) {
-                try {
-                    const data = await createSession(category);
-                    if (data.session_id) setSessionId(data.session_id);
-                } catch (e) {
-                    console.warn('Could not create Pro session:', e);
-                }
+            try {
+                const data = await createSession(category);
+                if (data.session_id) setSessionId(data.session_id);
+            } catch (e) {
+                console.warn('Could not create session:', e);
             }
         };
         initSession();
@@ -294,7 +292,7 @@ const TherapySessionPage = () => {
     const getTherapeuticResponse = async (userMessage, messageHistory) => {
         try {
             const token = localStorage.getItem('authToken');
-            const response = await fetch('https://puresoul-2026.onrender.com/api/get-response', {
+            const response = await fetch('http://localhost:5000/api/get-response', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -304,7 +302,8 @@ const TherapySessionPage = () => {
                     userMessage,
                     messageHistory: messageHistory.slice(-6),  // fallback for free users
                     category,
-                    session_id: sessionId,                     // Pro: backend loads from DB
+                    session_id: sessionId,                     // Universal: backend loads from DB
+                    emotion: initialEmotion,                  // Pass emotion for dashboard stats
                 }),
             });
 
