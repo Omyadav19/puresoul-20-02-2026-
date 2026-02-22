@@ -481,9 +481,7 @@ def create_session(current_user):
     Returns session_id for Pro users, None for free users.
     """
     try:
-        if not current_user.is_pro:
-            return jsonify({'session_id': None, 'is_pro': False}), 200
-
+      
         data = request.get_json() or {}
         category = data.get('category', 'Mental Health')
         session_title = data.get('session_title', f"{category} Session")
@@ -503,7 +501,7 @@ def create_session(current_user):
 
         return jsonify({
             'session_id': new_session.id,
-            'is_pro': True,
+            'is_pro': current_user.is_pro,
             'session': new_session.to_dict()
         }), 201
 
@@ -712,8 +710,9 @@ def get_response(current_user):
         user_message = data.get('userMessage', '')
         message_history = data.get('messageHistory', [])  # Fallback for free users
         category = data.get('category', 'Mental Health')
-        session_id = data.get('session_id', None)  # Pro users send this
-
+        session_id = data.get('session_id', None)  # Sent by frontend
+        emotion = data.get('emotion', None)       # Current detected emotion
+        
         current_system_prompt = SYSTEM_PROMPTS.get(category, SYSTEM_PROMPTS["Mental Health"])
 
         # Build conversation history for the LLM
@@ -723,10 +722,15 @@ def get_response(current_user):
 
         if current_user.is_pro and session_id:
             # ── PRO PATH: Load persistent history from DB ──
-            db_messages = _load_session_history(session_id, limit=30)
-            for m in db_messages:
-                role = 'user' if m.sender == 'user' else 'assistant'
-                conversation_history.append({"role": role, "content": m.message_text})
+            if db_messages:
+                for m in db_messages:
+                    role = 'user' if m.sender == 'user' else 'assistant'
+                    conversation_history.append({"role": role, "content": m.message_text})
+            else:
+                # Fallback to client history if DB is empty for this session
+                for msg in message_history:
+                    role = 'user' if msg.get('sender') == 'user' else 'assistant'
+                    conversation_history.append({"role": role, "content": msg.get('text', '')})
         else:
             # ── FREE PATH: Use in-memory history from client ──
             for msg in message_history:
@@ -748,12 +752,21 @@ def get_response(current_user):
             else "I'm here to listen. Could you tell me more?"
         )
 
-        # ── PRO: Persist both messages ──
-        if current_user.is_pro and session_id:
-            _save_message(session_id, 'user', user_message)
-            _save_message(session_id, 'ai', response_text)
+       # ── Persist both messages if we have a session ──
+        if session_id:
+            _save_message(session_id, 'user', user_message, emotion=emotion)
+            _save_message(session_id, 'ai', response_text, emotion=emotion)
 
-        return jsonify({'therapistResponse': response_text})
+        # ── DEDUCT CREDIT (Only for non-Pro) ──
+        # We deduct here because the response was successfully generated.
+        if not current_user.is_pro:
+            current_user.credits = max(0, current_user.credits - 1)
+            db.session.commit()
+
+        return jsonify({
+            'therapistResponse': response_text,
+            'remainingCredits': current_user.credits
+        })
 
     except Exception as e:
         print(f"Error calling Groq API: {e}")
