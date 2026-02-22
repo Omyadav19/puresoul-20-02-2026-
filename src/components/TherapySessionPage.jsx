@@ -62,7 +62,7 @@ class TTSQueue {
 const fetchTTSAudioArrayBuffer = async (text) => {
     if (!text || !text.trim()) return null;
     try {
-        const resp = await fetch('http://localhost:5000/api/text-to-speech', {
+        const resp = await fetch('https://puresoul-2026.onrender.com/api/text-to-speech', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text }),
@@ -292,7 +292,7 @@ const TherapySessionPage = () => {
     const getTherapeuticResponse = async (userMessage, messageHistory) => {
         try {
             const token = localStorage.getItem('authToken');
-            const response = await fetch('http://localhost:5000/api/get-response', {
+            const response = await fetch('https://puresoul-2026.onrender.com/api/get-response', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
