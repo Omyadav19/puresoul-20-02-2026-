@@ -1,7 +1,7 @@
 // src/utils/proApi.js
 // Centralised helper for all Pro-tier API calls.
 
-const BASE_URL = 'http://localhost:5000';
+const BASE_URL = 'https://puresoul-2026.onrender.com';
 
 const authHeaders = () => ({
     'Content-Type': 'application/json',
