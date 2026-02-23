@@ -15,6 +15,7 @@ import CreditPopup from './CreditSystem/CreditPopup';
 import ProSessionsSidebar from './ProSessionsSidebar.jsx';
 import ProUpgradeBanner from './ProUpgradeBanner.jsx';
 import { createSession, endSession, fetchSessionMessages } from '../utils/proApi';
+import { API_BASE_URL } from '../utils/apiconfig';
 
 // ─── TTS Queue ────────────────────────────────────────────────────────────────
 class TTSQueue {
@@ -62,7 +63,7 @@ class TTSQueue {
 const fetchTTSAudioArrayBuffer = async (text) => {
     if (!text || !text.trim()) return null;
     try {
-        const resp = await fetch('https://puresoul-2026.onrender.com/api/text-to-speech', {
+        const resp = await fetch(`${API_BASE_URL}/api/text-to-speech`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text }),
@@ -292,7 +293,7 @@ const TherapySessionPage = () => {
     const getTherapeuticResponse = async (userMessage, messageHistory) => {
         try {
             const token = localStorage.getItem('authToken');
-            const response = await fetch('https://puresoul-2026.onrender.com/api/get-response', {
+            const response = await fetch(`${API_BASE_URL}/api/get-response`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
