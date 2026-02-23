@@ -27,10 +27,11 @@ app = Flask(__name__)
 CORS(app)
 
 # Database Configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 db_uri = os.getenv('SQLALCHEMY_DATABASE_URI')
 if db_uri and db_uri.startswith("postgres://"):
     db_uri = db_uri.replace("postgres://", "postgresql://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 
@@ -205,6 +206,36 @@ def get_dashboard(current_user):
         print(f"Dashboard error: {e}")
         return jsonify({'message': 'Server error fetching dashboard data.'}), 500
 
+@app.route('/api/admin/migrate', methods=['GET'])
+def run_migration():
+    """Temporary endpoint to fix DB schema in production (PostgreSQL/MySQL compatible)."""
+    try:
+        from sqlalchemy import text, inspect
+        inspector = inspect(db.engine)
+        
+        # 1. Update 'users' table
+        user_columns = [c['name'] for c in inspector.get_columns('users')]
+        if 'total_credits_purchased' not in user_columns:
+            db.session.execute(text("ALTER TABLE users ADD COLUMN total_credits_purchased INTEGER DEFAULT 0"))
+        if 'is_pro' not in user_columns:
+            db.session.execute(text("ALTER TABLE users ADD COLUMN is_pro BOOLEAN DEFAULT FALSE"))
+
+        # 2. Update 'therapy_sessions' table
+        session_columns = [c['name'] for c in inspector.get_columns('therapy_sessions')]
+        if 'session_title' not in session_columns:
+            db.session.execute(text("ALTER TABLE therapy_sessions ADD COLUMN session_title VARCHAR(255)"))
+
+        # 3. Update 'therapy_messages' table
+        message_columns = [c['name'] for c in inspector.get_columns('therapy_messages')]
+        if 'emotion_detected' not in message_columns:
+            db.session.execute(text("ALTER TABLE therapy_messages ADD COLUMN emotion_detected VARCHAR(50)"))
+
+        db.session.commit()
+        return jsonify({'message': 'Migration successful for PostgreSQL/MySQL!'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Migration error: {e}")
+        return jsonify({'message': f'Migration failed: {str(e)}'}), 500
 
 @app.route('/api/mood-history', methods=['GET'])
 @token_required
