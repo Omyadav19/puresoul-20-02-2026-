@@ -450,7 +450,7 @@ const TherapySessionPage = () => {
                         </div>
                     </div>
 
-                    <div className="flex items-center space-x-3 pr-4">
+                    <div className="flex items-center space-x-2 pr-4">
                         {/* Pro badge / upgrade button */}
                         {isPro ? (
                             <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-300 text-xs font-bold">
