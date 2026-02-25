@@ -20,7 +20,7 @@ export const AppProvider = ({ children }) => {
         const verifiedUser = verifySessionToken(token);
         // Merge is_pro from localStorage (saved at login)
         const storedUser = JSON.parse(localStorage.getItem('userData') || '{}');
-        return { ...verifiedUser, is_pro: storedUser.is_pro || false };
+        return { ...verifiedUser, ...storedUser };
       } catch (error) {
         console.warn('Token verification failed, clearing invalid token:', error.message);
         localStorage.removeItem('authToken');
