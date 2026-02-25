@@ -1,6 +1,6 @@
 import { API_BASE_URL } from './apiConfig';
 
-const BASE_URL = API_BASE_URL;
+const BASE_URL = 'https://puresoul-2026.onrender.com';
 
 const authHeaders = () => ({
     'Content-Type': 'application/json',
