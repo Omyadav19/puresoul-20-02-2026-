@@ -189,7 +189,7 @@ const TherapySessionPage = () => {
     const CategoryIcon = currentTheme.icon;
 
     const { user, addTherapySession, setSadDetectionCount, theme, toggleTheme, logout } = useApp();
-    const { credits, consumeCredit, refreshCredits } = useCredits();
+    const { credits, totalCreditsPurchased, consumeCredit, refreshCredits } = useCredits();
 
     // ── State ──
     const [messages, setMessages] = useState([]);
@@ -466,7 +466,7 @@ const TherapySessionPage = () => {
                             </motion.button>
                         )}
 
-                        {/* Credits */}
+                        {/* Credits - Show Max Energy to match image */}
                         <motion.button
                             whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                             onClick={() => navigate('/buy-credits')}
@@ -476,7 +476,7 @@ const TherapySessionPage = () => {
                                 }`}
                         >
                             <Ticket className="w-3 h-3" />
-                            <span>{credits}</span>
+                            <span>{(12 + (totalCreditsPurchased || 0))}</span>
                         </motion.button>
 
                         <CreditProgress />
