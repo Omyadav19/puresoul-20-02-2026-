@@ -27,9 +27,19 @@ app = Flask(__name__)
 CORS(app)
 
 # Database Configuration
-db_uri = os.getenv('SQLALCHEMY_DATABASE_URI')
-if db_uri and db_uri.startswith("postgres://"):
-    db_uri = db_uri.replace("postgres://", "postgresql://", 1)
+db_uri = os.getenv('SQLALCHEMY_DATABASE_URI') or os.getenv('DATABASE_URL')
+if not db_uri:
+    # FALLBACK: Use SQLite for local development if DB URI is missing
+    instance_path = os.path.join(os.path.dirname(__file__), 'instance')
+    if not os.path.exists(instance_path):
+        os.makedirs(instance_path)
+    db_uri = f"sqlite:///{os.path.join(instance_path, 'puresoul.db')}"
+    print(f"DATABASE: Missing SQLALCHEMY_DATABASE_URI. Using local SQLite: {db_uri}")
+else:
+    if db_uri.startswith("postgres://"):
+        db_uri = db_uri.replace("postgres://", "postgresql://", 1)
+    elif db_uri.startswith("mysql://"):
+        db_uri = db_uri.replace("mysql://", "mysql+pymysql://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -38,16 +48,22 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
 # Initialize API clients
-groq_client = Groq(api_key=os.getenv('GROQ_API_KEY'))
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+if not GROQ_API_KEY:
+    print("WARNING: GROQ_API_KEY is not set. Chat features will error out.")
+    groq_client = None
+else:
+    groq_client = Groq(api_key=GROQ_API_KEY)
+
 ELEVENLABS_API_KEY = os.getenv("ELEVEN_API_KEY")
-
 if not ELEVENLABS_API_KEY:
-    raise RuntimeError("ELEVENLABS_API_KEY is not set")
-
-elevenlabs_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+    print("WARNING: ELEVEN_API_KEY is not set. Voice features will error out.")
+    elevenlabs_client = None
+else:
+    elevenlabs_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
 # JWT Secret
-JWT_SECRET = os.getenv('JWT_SECRET', 'your-secret-key')
+JWT_SECRET = os.getenv('JWT_SECRET', 'puresoul-super-secure-default-key-123')
 
 # Create tables within app context
 with app.app_context():
@@ -362,8 +378,20 @@ def login():
         if not user:
             return jsonify({'message': 'Invalid credentials.'}), 400
 
-        if not bcrypt.checkpw(password.encode('utf-8'), user.password.encode('utf-8')):
-            return jsonify({'message': 'Invalid credentials.'}), 400
+        try:
+            # Verify bcrypt hash
+            db_password = user.password.encode('utf-8')
+            if not bcrypt.checkpw(password.encode('utf-8'), db_password):
+                return jsonify({'message': 'Invalid credentials.'}), 400
+        except Exception as bcrypt_err:
+            print(f"Bcrypt error: {bcrypt_err}")
+            # Fallback for plain text passwords (ONLY FOR DEBUG/RECOVERY)
+            if user.password == password:
+                print("WARNING: User logged in with plain text password. Re-hashing...")
+                user.password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                db.session.commit()
+            else:
+                return jsonify({'message': 'Server error during login/auth.'}), 500
 
         token = jwt.encode(
             {
@@ -384,7 +412,7 @@ def login():
 
     except Exception as e:
         print(f"Login error: {e}")
-        return jsonify({'message': 'Server error during login.'}), 500
+        return jsonify({'message': f'Server error during login: {str(e)}'}), 500
 
 
 @app.route('/api/credits', methods=['GET'])
@@ -767,7 +795,7 @@ def get_response(current_user):
 
         # Detect emotion of the user's message
         user_emotion = provided_emotion
-        if not user_emotion:
+        if not user_emotion and groq_client:
             try:
                 # Quick secondary call for classification
                 classify_completion = groq_client.chat.completions.create(
@@ -786,6 +814,9 @@ def get_response(current_user):
                 else:
                     user_emotion = 'neutral'
             except:
+                user_emotion = 'neutral'
+        else:
+            if not user_emotion:
                 user_emotion = 'neutral'
 
         # Build conversation history for the LLM
@@ -809,16 +840,19 @@ def get_response(current_user):
         conversation_history.append({"role": "user", "content": user_message})
 
         # Call Groq API
-        chat_completion = groq_client.chat.completions.create(
-            messages=conversation_history,
-            model="llama-3.3-70b-versatile"
-        )
+        if not groq_client:
+            response_text = "I'm here to listen. (AI features are currently limited as API key is not configured)"
+        else:
+            chat_completion = groq_client.chat.completions.create(
+                messages=conversation_history,
+                model="llama-3.3-70b-versatile"
+            )
 
-        response_text = (
-            chat_completion.choices[0].message.content
-            if chat_completion.choices
-            else "I'm here to listen. Could you tell me more?"
-        )
+            response_text = (
+                chat_completion.choices[0].message.content
+                if chat_completion.choices
+                else "I'm here to listen. Could you tell me more?"
+            )
 
         # ── Persist both messages for Analytics ──
         if session_id:
@@ -847,6 +881,9 @@ def text_to_speech(current_user):
 
         if not text:
             return jsonify({'error': 'Text is required'}), 400
+
+        if not elevenlabs_client:
+            return jsonify({'error': 'Voice support is currently unavailable on the server.'}), 503
 
         cleaned_text = re.sub(r'\*.*?\*', '', text)
         cleaned_text = re.sub(r'[\U0001F600-\U0001F64F]', '', cleaned_text)
