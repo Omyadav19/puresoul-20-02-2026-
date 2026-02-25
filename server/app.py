@@ -13,11 +13,11 @@ from dotenv import load_dotenv
 from groq import Groq
 from elevenlabs import ElevenLabs
 from functools import wraps
-
+from flask import send_from_directory
 from validation import validate_email, validate_username, validate_password
 from models import db, User, TherapySession, TherapyMessage, ContactUs
 
-print("RUNNING UPDATED app.py FILE (Pro System)")
+print("🔥 RUNNING UPDATED app.py FILE (Pro System) 🔥")
 
 # Load environment variables
 load_dotenv()
@@ -27,81 +27,32 @@ app = Flask(__name__)
 CORS(app)
 
 # Database Configuration
-db_uri = os.getenv('SQLALCHEMY_DATABASE_URI') or os.getenv('DATABASE_URL')
-if not db_uri:
-    # FALLBACK: Use SQLite for local development if DB URI is missing
-    instance_path = os.path.join(os.path.dirname(__file__), 'instance')
-    if not os.path.exists(instance_path):
-        os.makedirs(instance_path)
-    db_uri = f"sqlite:///{os.path.join(instance_path, 'puresoul.db')}"
-    print(f"DATABASE: Missing SQLALCHEMY_DATABASE_URI. Using local SQLite: {db_uri}")
-else:
-    if db_uri.startswith("postgres://"):
-        db_uri = db_uri.replace("postgres://", "postgresql://", 1)
-    elif db_uri.startswith("mysql://"):
-        db_uri = db_uri.replace("mysql://", "mysql+pymysql://", 1)
+db_uri = os.getenv('SQLALCHEMY_DATABASE_URI')
+if db_uri and db_uri.startswith("postgres://"):
+    db_uri = db_uri.replace("postgres://", "postgresql://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 
 # Initialize Extensions
 db.init_app(app)
 
 # Initialize API clients
-GROQ_API_KEY = os.getenv('GROQ_API_KEY')
-if not GROQ_API_KEY:
-    print("WARNING: GROQ_API_KEY is not set. Chat features will error out.")
-    groq_client = None
-else:
-    groq_client = Groq(api_key=GROQ_API_KEY)
-
+groq_client = Groq(api_key=os.getenv('GROQ_API_KEY'))
 ELEVENLABS_API_KEY = os.getenv("ELEVEN_API_KEY")
+
 if not ELEVENLABS_API_KEY:
-    print("WARNING: ELEVEN_API_KEY is not set. Voice features will error out.")
-    elevenlabs_client = None
-else:
-    elevenlabs_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+    raise RuntimeError("ELEVENLABS_API_KEY is not set")
+
+elevenlabs_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
 # JWT Secret
-JWT_SECRET = os.getenv('JWT_SECRET', 'puresoul-super-secure-default-key-123')
+JWT_SECRET = os.getenv('JWT_SECRET', 'your-secret-key')
 
-# Create tables and handle migrations
+# Create tables within app context
 with app.app_context():
     db.create_all()
-    # Simple migration: check if columns exist, if not, add them
-    try:
-        from sqlalchemy import inspect, text
-        inspector = inspect(db.engine)
-        columns = [c['name'] for c in inspector.get_columns('users')]
-        
-        # Check and add 'tier' column
-        if 'tier' not in columns:
-            print("MIGRATION: Adding 'tier' column to users table...")
-            db.session.execute(text("ALTER TABLE users ADD COLUMN tier VARCHAR(20) DEFAULT 'basic'"))
-            db.session.commit()
-            
-        # Check and add 'total_credits_purchased' column
-        if 'total_credits_purchased' not in columns:
-            print("MIGRATION: Adding 'total_credits_purchased' column to users table...")
-            db.session.execute(text("ALTER TABLE users ADD COLUMN total_credits_purchased INTEGER DEFAULT 0"))
-            db.session.commit()
-
-        # Check and add 'is_pro' column
-        if 'is_pro' not in columns:
-            print("MIGRATION: Adding 'is_pro' column to users table...")
-            db.session.execute(text("ALTER TABLE users ADD COLUMN is_pro BOOLEAN DEFAULT FALSE"))
-            db.session.commit()
-
-        # Check and add 'credits' column
-        if 'credits' not in columns:
-            print("MIGRATION: Adding 'credits' column to users table...")
-            db.session.execute(text("ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 12"))
-            db.session.commit()
-            
-        print("DATABASE: Migration check completed.")
-    except Exception as migration_error:
-        print(f"MIGRATION ERROR: {migration_error}")
-        db.session.rollback()
 
 # ============== AUTH DECORATORS ==============
 
@@ -255,6 +206,36 @@ def get_dashboard(current_user):
         print(f"Dashboard error: {e}")
         return jsonify({'message': 'Server error fetching dashboard data.'}), 500
 
+@app.route('/api/admin/migrate', methods=['GET'])
+def run_migration():
+    """Temporary endpoint to fix DB schema in production (PostgreSQL/MySQL compatible)."""
+    try:
+        from sqlalchemy import text, inspect
+        inspector = inspect(db.engine)
+        
+        # 1. Update 'users' table
+        user_columns = [c['name'] for c in inspector.get_columns('users')]
+        if 'total_credits_purchased' not in user_columns:
+            db.session.execute(text("ALTER TABLE users ADD COLUMN total_credits_purchased INTEGER DEFAULT 0"))
+        if 'is_pro' not in user_columns:
+            db.session.execute(text("ALTER TABLE users ADD COLUMN is_pro BOOLEAN DEFAULT FALSE"))
+
+        # 2. Update 'therapy_sessions' table
+        session_columns = [c['name'] for c in inspector.get_columns('therapy_sessions')]
+        if 'session_title' not in session_columns:
+            db.session.execute(text("ALTER TABLE therapy_sessions ADD COLUMN session_title VARCHAR(255)"))
+
+        # 3. Update 'therapy_messages' table
+        message_columns = [c['name'] for c in inspector.get_columns('therapy_messages')]
+        if 'emotion_detected' not in message_columns:
+            db.session.execute(text("ALTER TABLE therapy_messages ADD COLUMN emotion_detected VARCHAR(50)"))
+
+        db.session.commit()
+        return jsonify({'message': 'Migration successful for PostgreSQL/MySQL!'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Migration error: {e}")
+        return jsonify({'message': f'Migration failed: {str(e)}'}), 500
 
 @app.route('/api/mood-history', methods=['GET'])
 @token_required
@@ -359,42 +340,25 @@ def register():
         salt = bcrypt.gensalt(rounds=10)
         hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
 
-        tier = data.get('tier', 'basic').lower()
-        if tier not in ['basic', 'pro', 'plus']:
-            tier = 'basic'
-
-        initial_credits = 12
-        is_pro_status = False
-        if tier == 'pro':
-            initial_credits = 30
-            is_pro_status = True
-        elif tier == 'plus':
-            initial_credits = 50
-            is_pro_status = True
-
         new_user = User(
             name=name,
             email=email.lower(),
             username=username.lower(),
-            password=hashed_password.decode('utf-8'),
-            credits=initial_credits,
-            tier=tier,
-            is_pro=is_pro_status
+            password=hashed_password.decode('utf-8')
         )
 
         db.session.add(new_user)
         db.session.commit()
 
         return jsonify({
-            'message': f'Account created successfully as {tier.capitalize()}! Please login.',
-            'credits': initial_credits,
-            'tier': tier
+            'message': 'Account created successfully! Please login.',
+            'credits': 12
         }), 201
 
     except Exception as e:
         db.session.rollback()
         print(f"Registration error: {e}")
-        return jsonify({'message': f'Server error during registration: {str(e)}'}), 500
+        return jsonify({'message': 'Server error during registration.'}), 500
 
 
 @app.route('/api/login', methods=['POST'])
@@ -412,20 +376,8 @@ def login():
         if not user:
             return jsonify({'message': 'Invalid credentials.'}), 400
 
-        try:
-            # Verify bcrypt hash
-            db_password = user.password.encode('utf-8')
-            if not bcrypt.checkpw(password.encode('utf-8'), db_password):
-                return jsonify({'message': 'Invalid credentials.'}), 400
-        except Exception as bcrypt_err:
-            print(f"Bcrypt error: {bcrypt_err}")
-            # Fallback for plain text passwords (ONLY FOR DEBUG/RECOVERY)
-            if user.password == password:
-                print("WARNING: User logged in with plain text password. Re-hashing...")
-                user.password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-                db.session.commit()
-            else:
-                return jsonify({'message': 'Server error during login/auth.'}), 500
+        if not bcrypt.checkpw(password.encode('utf-8'), user.password.encode('utf-8')):
+            return jsonify({'message': 'Invalid credentials.'}), 400
 
         token = jwt.encode(
             {
@@ -446,7 +398,7 @@ def login():
 
     except Exception as e:
         print(f"Login error: {e}")
-        return jsonify({'message': f'Server error during login: {str(e)}'}), 500
+        return jsonify({'message': 'Server error during login.'}), 500
 
 
 @app.route('/api/credits', methods=['GET'])
@@ -532,26 +484,12 @@ def buy_credits_v2(current_user):
 @app.route('/api/pro/upgrade', methods=['POST'])
 @token_required
 def upgrade_to_pro(current_user):
-    """Upgrade a user to a specific tier (Pro or Plus)."""
+    """Upgrade a user to Pro status (in production, validate payment here)."""
     try:
-        data = request.get_json() or {}
-        new_tier = data.get('tier', 'pro').lower()
-        
-        if new_tier not in ['pro', 'plus']:
-            return jsonify({'message': 'Invalid tier specified.'}), 400
-
-        current_user.tier = new_tier
         current_user.is_pro = True
-        
-        # Grant credits based on upgrade
-        if new_tier == 'pro':
-            current_user.credits += 30
-        elif new_tier == 'plus':
-            current_user.credits += 50
-            
         db.session.commit()
         return jsonify({
-            'message': f'Successfully upgraded to {new_tier.capitalize()}!',
+            'message': 'Successfully upgraded to Pro!',
             'user': current_user.to_dict()
         }), 200
     except Exception as e:
@@ -567,8 +505,8 @@ def upgrade_to_pro(current_user):
 def create_session(current_user):
     """
     Create a new therapy session.
-    Available to all authenticated users, but only Pro users get persistence.
-    Returns session_id for Pro users, None for free users.
+    Available to all authenticated users.
+    Returns session_id for everyone to support dashboard analytics.
     """
     try:
         data = request.get_json() or {}
@@ -686,62 +624,39 @@ def get_session_messages(current_user, session_id):
         return jsonify({'message': 'Server error fetching messages.'}), 500
 
 
-@app.route('/api/pro/session/<int:session_id>', methods=['DELETE'])
-@pro_required
-def delete_session(current_user, session_id):
-    """Delete a therapy session and its messages (Pro only, owner only)."""
-    try:
-        session = TherapySession.query.filter_by(
-            id=session_id, user_id=current_user.id
-        ).first()
-
-        if not session:
-            return jsonify({'message': 'Session not found or access denied.'}), 404
-
-        db.session.delete(session)
-        db.session.commit()
-
-        return jsonify({'message': 'Session deleted successfully.'}), 200
-
-    except Exception as e:
-        db.session.rollback()
-        print(f"Delete session error: {e}")
-        return jsonify({'message': 'Server error deleting session.'}), 500
-
-
 # ============== MAIN CHAT ENDPOINT ==============
 
 SYSTEM_PROMPTS = {
     "Academic / Exam": """
 You are **Dost**, a compassionate Indian mentor specializing in Academic/Exam pressure.
-Mirror the user's language (English or Hinglish).Use english if user is using english.
+Mirror the user's language (English or Hinglish).
 Focus on exam anxiety, lack of focus, and study pressure.
 Arre dost, tension mat lo! Help them manage stress and build confidence.
-Keep it warm, empathetic, and under 2-3 sentences. Use emojis like 📚, ✍️, ✨.
+Keep it warm, empathetic, and under 3-4 sentences. Use emojis like 📚, ✍️, ✨.
 You remember everything from previous sessions and refer to past conversations naturally.
 NO asterisks (*).
 """,
     "Career & Jobs": """
 You are **Dost**, a career coach who understands the job market struggle in India.
-Mirror the user's language (English or Hinglish).Use english if user is using english.
+Mirror the user's language (English or Hinglish).
 Focus on career confusion, job search stress, and workplace politics.
 Dost, career stress real hai, but we will find a way. Provide professional yet emotional support.
-Keep it natural and under 2-3 sentences. Use emojis like 💼, 🚀, 🤞.
+Keep it natural and under 4 sentences. Use emojis like 💼, 🚀, 🤞.
 You remember everything from previous sessions and refer to past conversations naturally.
 NO asterisks (*).
 """,
     "Relationship": """
 You are **Dost**, an empathetic friend who listens to relationship problems.
-Mirror the user's language (English or Hinglish).Use english if user is using english.
+Mirror the user's language (English or Hinglish).
 Focus on heartbreaks, family issues, or friendship drama.
 Relationship issues dil se connected hoti hain. Give them a safe space to vent.
-Keep it very gentle and validating. Under  2-3 sentences. Use emojis like ❤️, 🤗, 🤝.
+Keep it very gentle and validating. Under 4 sentences. Use emojis like ❤️, 🤗, 🤝.
 You remember everything from previous sessions and refer to past conversations naturally.
 NO asterisks (*).
 """,
     "Health & Wellness": """
 You are **Dost**, a wellness companion focusing on physical and mental health.
-Mirror the user's language (English or Hinglish).Use english if user is using english.
+Mirror the user's language (English or Hinglish).
 Focus on recovery stress, sleep issues, or general fatigue.
 Health sabse pehle hai dost. Encourage healthy habits without being preachy.
 Keep it soothing and encouraging. Under 4 sentences. Use emojis like 🏥, 🧘, 🌿.
@@ -750,7 +665,7 @@ NO asterisks (*).
 """,
     "Personal Growth": """
 You are **Dost**, a motivation-focused friend for personal expansion.
-Mirror the user's language (English or Hinglish).Use english if user is using english.  
+Mirror the user's language (English or Hinglish).
 Focus on self-doubt, building habits, and finding purpose.
 Apne aap ko grow karna ek safar hai dost. Celebrate small wins.
 Keep it inspiring and positive. Under 4 sentences. Use emojis like 🌱, ⭐, 📈.
@@ -759,19 +674,19 @@ NO asterisks (*).
 """,
     "Mental Health": """
 You are **Dost**, a supportive companion for general mental wellness.
-Mirror the user's language (English or Hinglish).Use english if user is using english.  
+Mirror the user's language (English or Hinglish).
 Focus on anxiety, low mood, or just needing to be heard.
 Main hoon na dost, sab discuss karte hain. Provide a non-judgmental ear.
-Keep it empathetic and safe. Under 2-3 sentences. Use emojis like 🧠, 🫂, 🕊️.
+Keep it empathetic and safe. Under 4 sentences. Use emojis like 🧠, 🫂, 🕊️.
 You remember everything from previous sessions and refer to past conversations naturally.
 NO asterisks (*).
 """,
     "Financial Stress": """
 You are **Dost**, a practical friend who understands financial anxiety.
-Mirror the user's language (English or Hinglish).Use english if user is using english.  
+Mirror the user's language (English or Hinglish).
 Focus on money worries, loan stress, or stability.
 Paisa aur stress ka gehra rishta hai, but tension mat lo. Help them stay calm.
-Keep it grounded and supportive. Under 2-3 sentences. Use emojis like 💰, 🏦, ⚓.
+Keep it grounded and supportive. Under 4 sentences. Use emojis like 💰, 🏦, ⚓.
 You remember everything from previous sessions and refer to past conversations naturally.
 NO asterisks (*).
 """
@@ -809,7 +724,7 @@ def _load_session_history(session_id, limit=30):
 @app.route('/api/get-response', methods=['POST'])
 @token_required
 def get_response(current_user):
-    """Chatbot response endpoint using Groq API with Pro memory support."""
+    """Chatbot response endpoint using Groq API with persistence for all users."""
     try:
         # Check credits
         if current_user.credits <= 0:
@@ -822,50 +737,24 @@ def get_response(current_user):
         user_message = data.get('userMessage', '')
         message_history = data.get('messageHistory', [])  # Fallback for free users
         category = data.get('category', 'Mental Health')
-        session_id = data.get('session_id', None)  # Pro users send this
-        provided_emotion = data.get('emotion', None) # Optional frontend cam emotion
+        session_id = data.get('session_id', None)
+        emotion = data.get('emotion', None)  # User's current emotion
 
         current_system_prompt = SYSTEM_PROMPTS.get(category, SYSTEM_PROMPTS["Mental Health"])
-
-        # Detect emotion of the user's message
-        user_emotion = provided_emotion
-        if not user_emotion and groq_client:
-            try:
-                # Quick secondary call for classification
-                classify_completion = groq_client.chat.completions.create(
-                    messages=[
-                        {"role": "system", "content": "Classify the following message into exactly one emotion: happy, sad, neutral, surprised, angry, fear. Return ONLY the word."},
-                        {"role": "user", "content": user_message}
-                    ],
-                    model="llama3-8b-8192",
-                    max_tokens=10
-                )
-                detected = classify_completion.choices[0].message.content.strip().lower()
-                # Clean up punctuation if any
-                detected = re.sub(r'[^a-z]', '', detected)
-                if detected in ['happy', 'sad', 'neutral', 'surprised', 'angry', 'fear']:
-                    user_emotion = detected
-                else:
-                    user_emotion = 'neutral'
-            except:
-                user_emotion = 'neutral'
-        else:
-            if not user_emotion:
-                user_emotion = 'neutral'
 
         # Build conversation history for the LLM
         conversation_history = [
             {"role": "system", "content": current_system_prompt}
         ]
 
-        if current_user.tier == 'plus' and session_id:
-            # ── PLUS PATH: Load persistent history from DB (Memory) ──
+        if current_user.is_pro and session_id:
+            # ── PRO PATH: Load persistent history from DB (Long-term memory) ──
             db_messages = _load_session_history(session_id, limit=30)
             for m in db_messages:
                 role = 'user' if m.sender == 'user' else 'assistant'
                 conversation_history.append({"role": role, "content": m.message_text})
         else:
-            # ── BASIC/PRO PATH: Use in-memory history from client ──
+            # ── FREE PATH: Use in-memory history from client (Limited memory) ──
             for msg in message_history:
                 role = 'user' if msg.get('sender') == 'user' else 'assistant'
                 conversation_history.append({"role": role, "content": msg.get('text', '')})
@@ -874,24 +763,21 @@ def get_response(current_user):
         conversation_history.append({"role": "user", "content": user_message})
 
         # Call Groq API
-        if not groq_client:
-            response_text = "I'm here to listen. (AI features are currently limited as API key is not configured)"
-        else:
-            chat_completion = groq_client.chat.completions.create(
-                messages=conversation_history,
-                model="llama-3.3-70b-versatile"
-            )
+        chat_completion = groq_client.chat.completions.create(
+            messages=conversation_history,
+            model="llama-3.3-70b-versatile"
+        )
 
-            response_text = (
-                chat_completion.choices[0].message.content
-                if chat_completion.choices
-                else "I'm here to listen. Could you tell me more?"
-            )
+        response_text = (
+            chat_completion.choices[0].message.content
+            if chat_completion.choices
+            else "I'm here to listen. Could you tell me more?"
+        )
 
         # ── Persist both messages for Analytics ──
         if session_id:
-            _save_message(session_id, 'user', user_message, emotion=user_emotion)
-            _save_message(session_id, 'ai', response_text, emotion='neutral')
+            _save_message(session_id, 'user', user_message, emotion=emotion)
+            _save_message(session_id, 'ai', response_text)
 
         return jsonify({'therapistResponse': response_text})
 
@@ -900,24 +786,13 @@ def get_response(current_user):
         return jsonify({'error': 'Failed to get a response from the AI.'}), 500
 
 @app.route('/api/text-to-speech', methods=['POST'])
-@token_required
-def text_to_speech(current_user):
-    # Only Pro and Plus users have voice support
-    if current_user.tier not in ['pro', 'plus']:
-        return jsonify({
-            'error': 'Voice support is not available for Basic users.',
-            'upgrade_required': True
-        }), 403
-
+def text_to_speech():
     try:
         data = request.get_json()
         text = data.get('text', '')
 
         if not text:
             return jsonify({'error': 'Text is required'}), 400
-
-        if not elevenlabs_client:
-            return jsonify({'error': 'Voice support is currently unavailable on the server.'}), 503
 
         cleaned_text = re.sub(r'\*.*?\*', '', text)
         cleaned_text = re.sub(r'[\U0001F600-\U0001F64F]', '', cleaned_text)
