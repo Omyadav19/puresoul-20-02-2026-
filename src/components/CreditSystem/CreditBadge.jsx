@@ -2,9 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Ticket } from 'lucide-react';
 import { useCredits } from '../../context/CreditContext';
+import { useApp } from '../../context/AppContext';
 
 const CreditBadge = () => {
+    const { user } = useApp();
     const { credits, totalCreditsPurchased } = useCredits();
+
+    // Determine base credits by user tier
+    const isPro = user?.is_pro;
+    const isProPlus = user?.is_pro_plus;
+    const baseCredits = isProPlus ? 120 : (isPro ? 48 : 12);
+    const maxCredits = baseCredits + (totalCreditsPurchased || 0);
+
     const [prevCredits, setPrevCredits] = useState(credits);
     const [isAnimating, setIsAnimating] = useState(false);
 
@@ -44,7 +53,7 @@ const CreditBadge = () => {
                             {credits}
                         </motion.span>
                     </AnimatePresence>
-                    <span className="text-xs text-white/40 font-medium">/ {12 + (totalCreditsPurchased || 0)}</span>
+                    <span className="text-xs text-white/40 font-medium">/ {maxCredits}</span>
                 </div>
             </div>
 
