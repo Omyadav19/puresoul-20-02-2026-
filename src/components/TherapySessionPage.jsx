@@ -15,7 +15,8 @@ import CreditPopup from './CreditSystem/CreditPopup';
 import ProSessionsSidebar from './ProSessionsSidebar.jsx';
 import ProUpgradeBanner from './ProUpgradeBanner.jsx';
 import { createSession, endSession, fetchSessionMessages } from '../utils/proApi';
-import { API_BASE_URL } from '../utils/apiConfig';
+
+const BASE_URL = 'https://puresoul-2026.onrender.com';
 
 // ─── TTS Queue ────────────────────────────────────────────────────────────────
 class TTSQueue {
