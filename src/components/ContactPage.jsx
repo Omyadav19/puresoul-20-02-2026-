@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Mail, Send, CheckCircle, ArrowLeft, Sun, Moon, Sparkles, MapPin, Phone } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
+import { API_BASE_URL } from '../utils/apiConfig';
 
 const ContactPage = ({ isSection = false }) => {
   const navigate = useNavigate();
@@ -11,14 +12,13 @@ const ContactPage = ({ isSection = false }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
-  const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:5000';
   const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/contact`, {
+      const res = await fetch(`${API_BASE_URL}/api/contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, message })
