@@ -4,13 +4,11 @@ import {
   TrendingUp, Calendar, Clock, ArrowLeft, Activity,
   Sun, Moon, LogOut, Ticket,
   Smile, Frown, Meh, AlertCircle, Sparkles, ShieldAlert, MessageSquare,
-  Brain, ChevronDown, ChevronUp, Loader2, Database, Crown, RefreshCw, Trash2
+  Brain, ChevronDown, ChevronUp, Loader2, Database, Crown, RefreshCw
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import { useCredits } from '../context/CreditContext';
-import { deleteSession } from '../utils/proApi';
-
 
 const BASE_URL = 'https://puresoul-2026.onrender.com';
 
@@ -69,7 +67,7 @@ const StatCard = ({ title, value, icon: Icon, color, glow, trend, theme }) => (
 );
 
 // ── Session Row ──────────────────────────────────────────────────────────────
-const SessionRow = ({ session, index, theme, onDelete }) => {
+const SessionRow = ({ session, index, theme }) => {
   const [expanded, setExpanded] = useState(false);
   const isDark = theme === 'dark';
 
@@ -156,19 +154,6 @@ const SessionRow = ({ session, index, theme, onDelete }) => {
             )) : (
               <p className="text-slate-500 text-xs text-center py-2">No messages preview available</p>
             )}
-
-            <div className="flex justify-center pt-2">
-              <motion.button
-                whileHover={{ scale: 1.05, bg: 'rgba(239, 68, 68, 0.1)' }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => onDelete(session.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all text-red-400 border border-red-400/20 hover:border-red-400/50`}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete Session History
-              </motion.button>
-            </div>
-
             {session.message_count > 5 && (
               <p className="text-center text-[10px] text-slate-500 font-medium pt-1">
                 + {session.message_count - 5} more messages in this session
@@ -208,19 +193,6 @@ const MoodHistoryPage = () => {
       setError(e.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleDeleteSession = async (sessionId) => {
-    if (!window.confirm('Permanent delete? This cannot be undone.')) return;
-    try {
-      await deleteSession(sessionId);
-      setData(prev => ({
-        ...prev,
-        sessions: prev.sessions.filter(s => s.id !== sessionId)
-      }));
-    } catch (err) {
-      alert('Delete failed: ' + err.message);
     }
   };
 
@@ -390,7 +362,7 @@ const MoodHistoryPage = () => {
           {filteredSessions.length > 0 ? (
             <div className="space-y-3">
               {filteredSessions.map((session, i) => (
-                <SessionRow key={session.id} session={session} index={i} theme={theme} onDelete={handleDeleteSession} />
+                <SessionRow key={session.id} session={session} index={i} theme={theme} />
               ))}
             </div>
           ) : (
