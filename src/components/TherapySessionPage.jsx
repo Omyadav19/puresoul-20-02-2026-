@@ -322,8 +322,8 @@ const TherapySessionPage = () => {
 
     // ── Send message ──
     const handleSendMessage = async () => {
-        if (!inputMessage.trim() || credits <= 0 || isTyping) {
-            if (credits <= 0 && !isTyping) setShowCreditPopup(true);
+        if (!inputMessage.trim() || credits <= 0) {
+            if (credits <= 0) setShowCreditPopup(true);
             return;
         }
 
@@ -576,10 +576,10 @@ const TherapySessionPage = () => {
                             />
                             <motion.button
                                 onClick={handleSendMessage}
-                                whileHover={credits > 0 && !isTyping ? { scale: 1.05 } : {}}
-                                whileTap={credits > 0 && !isTyping ? { scale: 0.95 } : {}}
-                                disabled={!inputMessage.trim() || credits <= 0 || isTyping}
-                                className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${credits > 0 && !isTyping
+                                whileHover={credits > 0 ? { scale: 1.05 } : {}}
+                                whileTap={credits > 0 ? { scale: 0.95 } : {}}
+                                disabled={!inputMessage.trim() || credits <= 0}
+                                className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${credits > 0
                                     ? `${currentTheme.accent} text-white`
                                     : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                                     } disabled:opacity-50`}
