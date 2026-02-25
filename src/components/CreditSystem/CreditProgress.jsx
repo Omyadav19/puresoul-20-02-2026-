@@ -4,10 +4,11 @@ import { useApp } from '../../context/AppContext';
 
 const CreditProgress = () => {
     const { user } = useApp();
-    const { credits, totalCreditsPurchased, isProPlus } = useCredits();
+    const { credits, totalCreditsPurchased } = useCredits();
 
     // Determine base credits by user tier
     const isPro = user?.is_pro;
+    const isProPlus = user?.is_pro_plus;
     const baseCredits = isProPlus ? 120 : (isPro ? 48 : 12);
 
     const maxCredits = baseCredits + (totalCreditsPurchased || 0);
