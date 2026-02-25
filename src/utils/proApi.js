@@ -1,4 +1,5 @@
-import { API_BASE_URL } from './apiConfig';
+// src/utils/proApi.js
+// Centralised helper for all Pro-tier API calls.
 
 const BASE_URL = 'https://puresoul-2026.onrender.com';
 
@@ -6,7 +7,6 @@ const authHeaders = () => ({
     'Content-Type': 'application/json',
     Authorization: `Bearer ${localStorage.getItem('authToken')}`,
 });
-
 
 // ── Session lifecycle ──────────────────────────────────────────────────────
 
@@ -63,20 +63,6 @@ export async function fetchSessionMessages(sessionId) {
     });
     if (res.status === 403) throw new Error('PRO_REQUIRED');
     if (!res.ok) throw new Error('Failed to fetch session messages');
-    return res.json();
-}
-
-/**
- * Delete a specific therapy session.
- * @param {number} sessionId
- */
-export async function deleteSession(sessionId) {
-    const res = await fetch(`${BASE_URL}/api/pro/session/${sessionId}`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-    });
-    if (res.status === 403) throw new Error('PRO_REQUIRED');
-    if (!res.ok) throw new Error('Failed to delete session');
     return res.json();
 }
 
