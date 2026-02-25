@@ -445,7 +445,11 @@ const TherapySessionPage = () => {
                             <h1 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{category}</h1>
                             <p className={`text-sm ${theme === 'dark' ? 'text-blue-200' : 'text-slate-500'}`}>
                                 Personalized Support • Confidential Safe Space
-                                {isPro && <span className="ml-2 text-purple-300 font-semibold">✦ Pro</span>}
+                                {isPro && (
+                                    <span className="ml-2 text-purple-300 font-semibold">
+                                        ✦ {user?.is_pro_plus ? 'Pro+' : 'Pro'}
+                                    </span>
+                                )}
                             </p>
                         </div>
                     </div>
@@ -454,7 +458,7 @@ const TherapySessionPage = () => {
                         {/* Pro badge / upgrade button */}
                         {isPro ? (
                             <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-300 text-xs font-bold">
-                                <Crown className="w-3 h-3" /> Pro
+                                <Crown className="w-3 h-3" /> {user?.is_pro_plus ? 'Pro+' : 'Pro'}
                             </div>
                         ) : (
                             <motion.button
