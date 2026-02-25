@@ -322,8 +322,8 @@ const TherapySessionPage = () => {
 
     // ── Send message ──
     const handleSendMessage = async () => {
-        if (!inputMessage.trim() || credits <= 0) {
-            if (credits <= 0) setShowCreditPopup(true);
+        if (!inputMessage.trim() || credits <= 0 || isTyping) {
+            if (credits <= 0 && !isTyping) setShowCreditPopup(true);
             return;
         }
 
@@ -450,7 +450,7 @@ const TherapySessionPage = () => {
                         </div>
                     </div>
 
-                    <div className="flex items-center space-x-2 pr-4">
+                    <div className="flex items-center space-x-3 pr-4">
                         {/* Pro badge / upgrade button */}
                         {isPro ? (
                             <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-500/20 border border-purple-500/30 text-purple-300 text-xs font-bold">
@@ -576,10 +576,10 @@ const TherapySessionPage = () => {
                             />
                             <motion.button
                                 onClick={handleSendMessage}
-                                whileHover={credits > 0 ? { scale: 1.05 } : {}}
-                                whileTap={credits > 0 ? { scale: 0.95 } : {}}
-                                disabled={!inputMessage.trim() || credits <= 0}
-                                className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${credits > 0
+                                whileHover={credits > 0 && !isTyping ? { scale: 1.05 } : {}}
+                                whileTap={credits > 0 && !isTyping ? { scale: 0.95 } : {}}
+                                disabled={!inputMessage.trim() || credits <= 0 || isTyping}
+                                className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${credits > 0 && !isTyping
                                     ? `${currentTheme.accent} text-white`
                                     : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                                     } disabled:opacity-50`}
