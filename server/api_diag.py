@@ -3,7 +3,7 @@ import json
 import random
 import string
 
-BASE_URL = "http://localhost:5000"
+BASE_URL = "https://puresoul-2026.onrender.com"
 
 def generate_random_string(length=8):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
