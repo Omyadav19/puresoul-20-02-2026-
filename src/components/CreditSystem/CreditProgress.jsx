@@ -4,31 +4,30 @@ import { useCredits } from '../../context/CreditContext';
 
 const CreditProgress = () => {
     const { credits, totalCreditsPurchased } = useCredits();
-    const initialMax = 12 + (totalCreditsPurchased || 0);
-    const maxCredits = Math.max(credits, initialMax);
-    const progress = maxCredits > 0 ? (credits / maxCredits) * 100 : 0;
+    const maxCredits = 12 + (totalCreditsPurchased || 0);
+    const progress = (credits / maxCredits) * 100;
 
     // Determine color based on remaining credits
     const getProgressColor = () => {
-        if (credits <= 3) return 'bg-rose-500';
-        if (credits <= 7) return 'bg-amber-500';
+        if (credits <= 2) return 'bg-rose-500';
+        if (credits <= 5) return 'bg-amber-500';
         return 'bg-blue-500';
     };
 
     const getGlowColor = () => {
-        if (credits <= 3) return 'shadow-[0_0_10px_#f43f5e]';
-        if (credits <= 7) return 'shadow-[0_0_10px_#f59e0b]';
+        if (credits <= 2) return 'shadow-[0_0_10px_#f43f5e]';
+        if (credits <= 5) return 'shadow-[0_0_10px_#f59e0b]';
         return 'shadow-[0_0_10px_#3b82f6]';
     };
 
     return (
-        <div className="flex flex-col gap-1.5 w-full min-w-[140px] max-w-[180px]">
-            <div className="flex justify-between items-center px-0.5">
-                <span className="text-[9px] uppercase tracking-[0.1em] font-black text-white/40 whitespace-nowrap">
+        <div className="flex flex-col gap-2 w-full max-w-[200px]">
+            <div className="flex justify-between items-end px-1">
+                <span className="text-[10px] uppercase tracking-widest font-black text-white/40">
                     Energy Balance
                 </span>
-                <span className={`text-[10px] font-black whitespace-nowrap ${credits <= 3 ? 'text-rose-400' : 'text-blue-300'}`}>
-                    {credits} <span className="text-white/20 font-medium">/</span> {maxCredits}
+                <span className={`text-xs font-bold ${progress <= 20 ? 'text-rose-400' : 'text-blue-300'}`}>
+                    {credits} / {maxCredits}
                 </span>
             </div>
 
