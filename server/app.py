@@ -65,9 +65,43 @@ else:
 # JWT Secret
 JWT_SECRET = os.getenv('JWT_SECRET', 'puresoul-super-secure-default-key-123')
 
-# Create tables within app context
+# Create tables and handle migrations
 with app.app_context():
     db.create_all()
+    # Simple migration: check if columns exist, if not, add them
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+        columns = [c['name'] for c in inspector.get_columns('users')]
+        
+        # Check and add 'tier' column
+        if 'tier' not in columns:
+            print("MIGRATION: Adding 'tier' column to users table...")
+            db.session.execute(text("ALTER TABLE users ADD COLUMN tier VARCHAR(20) DEFAULT 'basic'"))
+            db.session.commit()
+            
+        # Check and add 'total_credits_purchased' column
+        if 'total_credits_purchased' not in columns:
+            print("MIGRATION: Adding 'total_credits_purchased' column to users table...")
+            db.session.execute(text("ALTER TABLE users ADD COLUMN total_credits_purchased INTEGER DEFAULT 0"))
+            db.session.commit()
+
+        # Check and add 'is_pro' column
+        if 'is_pro' not in columns:
+            print("MIGRATION: Adding 'is_pro' column to users table...")
+            db.session.execute(text("ALTER TABLE users ADD COLUMN is_pro BOOLEAN DEFAULT FALSE"))
+            db.session.commit()
+
+        # Check and add 'credits' column
+        if 'credits' not in columns:
+            print("MIGRATION: Adding 'credits' column to users table...")
+            db.session.execute(text("ALTER TABLE users ADD COLUMN credits INTEGER DEFAULT 12"))
+            db.session.commit()
+            
+        print("DATABASE: Migration check completed.")
+    except Exception as migration_error:
+        print(f"MIGRATION ERROR: {migration_error}")
+        db.session.rollback()
 
 # ============== AUTH DECORATORS ==============
 
@@ -360,7 +394,7 @@ def register():
     except Exception as e:
         db.session.rollback()
         print(f"Registration error: {e}")
-        return jsonify({'message': 'Server error during registration.'}), 500
+        return jsonify({'message': f'Server error during registration: {str(e)}'}), 500
 
 
 @app.route('/api/login', methods=['POST'])
