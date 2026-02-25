@@ -48,7 +48,8 @@ export const CreditProvider = ({ children }) => {
                     ...user,
                     credits: newCredits,
                     total_credits_purchased: newTotalPurchased,
-                    is_pro: data.is_pro
+                    is_pro: data.is_pro,
+                    is_pro_plus: data.is_pro_plus
                 };
                 localStorage.setItem('userData', JSON.stringify(updatedUser));
                 setUser(updatedUser);
@@ -82,7 +83,9 @@ export const CreditProvider = ({ children }) => {
                 const updatedUser = {
                     ...user,
                     credits: newCredits,
-                    total_credits_purchased: newTotalPurchased
+                    total_credits_purchased: newTotalPurchased,
+                    is_pro: data.is_pro,
+                    is_pro_plus: data.is_pro_plus
                 };
                 localStorage.setItem('userData', JSON.stringify(updatedUser));
                 setUser(updatedUser);
@@ -120,7 +123,9 @@ export const CreditProvider = ({ children }) => {
                 const updatedUser = {
                     ...user,
                     credits: newCredits,
-                    total_credits_purchased: newTotalPurchased
+                    total_credits_purchased: newTotalPurchased,
+                    is_pro: data.is_pro,
+                    is_pro_plus: data.is_pro_plus
                 };
                 localStorage.setItem('userData', JSON.stringify(updatedUser));
                 setUser(updatedUser);
