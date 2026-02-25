@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useApp } from './AppContext';
-const BASE_URL = 'https://puresoul-2026.onrender.com';
 
 const CreditContext = createContext(undefined);
 
@@ -15,12 +14,14 @@ export const useCredits = () => {
 export const CreditProvider = ({ children }) => {
     const { user } = useApp();
     const [credits, setCredits] = useState(user?.credits || 12);
+    const [totalCreditsPurchased, setTotalCreditsPurchased] = useState(user?.total_credits_purchased || 0);
     const [isLoading, setIsLoading] = useState(false);
 
     // Sync credits from user object in AppContext if it changes
     useEffect(() => {
         if (user) {
             setCredits(user.credits);
+            setTotalCreditsPurchased(user.total_credits_purchased || 0);
         }
     }, [user]);
 
@@ -29,7 +30,7 @@ export const CreditProvider = ({ children }) => {
         setIsLoading(true);
         try {
             const token = localStorage.getItem('authToken');
-            const response = await fetch(`${API_BASE_URL}/api/credits`, {
+            const response = await fetch('https://puresoul-2026.onrender.com/api/credits', {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -37,6 +38,7 @@ export const CreditProvider = ({ children }) => {
             if (response.ok) {
                 const data = await response.json();
                 setCredits(data.credits);
+                setTotalCreditsPurchased(data.total_credits_purchased || 0);
             }
         } catch (error) {
             console.error('Failed to refresh credits:', error);
@@ -49,7 +51,7 @@ export const CreditProvider = ({ children }) => {
         if (!user) return;
         try {
             const token = localStorage.getItem('authToken');
-            const response = await fetch(`${API_BASE_URL}/api/credits/use`, {
+            const response = await fetch('https://puresoul-2026.onrender.com/api/credits/use', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -58,6 +60,9 @@ export const CreditProvider = ({ children }) => {
             if (response.ok) {
                 const data = await response.json();
                 setCredits(data.credits);
+                if (data.total_credits_purchased !== undefined) {
+                    setTotalCreditsPurchased(data.total_credits_purchased);
+                }
                 return true;
             }
             return false;
@@ -71,7 +76,7 @@ export const CreditProvider = ({ children }) => {
         if (!user) return;
         try {
             const token = localStorage.getItem('authToken');
-            const response = await fetch(`${API_BASE_URL}/api/credits/buy`, {
+            const response = await fetch('https://puresoul-2026.onrender.com/api/credits/buy', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -82,6 +87,7 @@ export const CreditProvider = ({ children }) => {
             if (response.ok) {
                 const data = await response.json();
                 setCredits(data.credits);
+                setTotalCreditsPurchased(data.total_credits_purchased);
             }
         } catch (error) {
             console.error('Failed to add credits:', error);
@@ -91,6 +97,7 @@ export const CreditProvider = ({ children }) => {
     return (
         <CreditContext.Provider value={{
             credits,
+            totalCreditsPurchased,
             consumeCredit,
             addCredits,
             refreshCredits,
