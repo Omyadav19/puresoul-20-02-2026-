@@ -409,7 +409,8 @@ def get_credits(current_user):
         'username': current_user.username,
         'credits': current_user.credits,
         'total_credits_purchased': current_user.total_credits_purchased,
-        'is_pro': current_user.is_pro
+        'is_pro': current_user.is_pro,
+        'is_pro_plus': current_user.is_pro_plus
     }), 200
 
 
@@ -432,7 +433,8 @@ def use_credit(current_user):
         'message': 'Credit deducted',
         'credits': current_user.credits,
         'total_credits_purchased': current_user.total_credits_purchased,
-        'is_pro': current_user.is_pro
+        'is_pro': current_user.is_pro,
+        'is_pro_plus': current_user.is_pro_plus
     }), 200
 
 
@@ -480,7 +482,8 @@ def buy_credits_v2(current_user):
         'message': f'Successfully purchased {amount} credits!',
         'credits': current_user.credits,
         'total_credits_purchased': current_user.total_credits_purchased,
-        'is_pro': current_user.is_pro
+        'is_pro': current_user.is_pro,
+        'is_pro_plus': current_user.is_pro_plus
     }), 200
 
 
@@ -489,12 +492,35 @@ def buy_credits_v2(current_user):
 @app.route('/api/pro/upgrade', methods=['POST'])
 @token_required
 def upgrade_to_pro(current_user):
-    """Upgrade a user to Pro status (in production, validate payment here)."""
+    """Upgrade a user to Pro status (48 credits base)."""
     try:
         current_user.is_pro = True
+        # Set base credits to 48 if currently lower
+        if current_user.credits < 48:
+            current_user.credits = 48
         db.session.commit()
         return jsonify({
             'message': 'Successfully upgraded to Pro!',
+            'user': current_user.to_dict()
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Upgrade error: {e}")
+        return jsonify({'message': 'Server error during upgrade.'}), 500
+
+@app.route('/api/pro-plus/upgrade', methods=['POST'])
+@token_required
+def upgrade_to_pro_plus(current_user):
+    """Upgrade a user to Pro+ status (120 credits base)."""
+    try:
+        current_user.is_pro = True
+        current_user.is_pro_plus = True
+        # Set base credits to 120 if currently lower
+        if current_user.credits < 120:
+            current_user.credits = 120
+        db.session.commit()
+        return jsonify({
+            'message': 'Successfully upgraded to Pro+!',
             'user': current_user.to_dict()
         }), 200
     except Exception as e:
