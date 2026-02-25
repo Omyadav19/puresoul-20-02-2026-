@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useApp } from './AppContext';
-import { API_BASE_URL } from '../utils/apiConfig';
+const BASE_URL = 'https://puresoul-2026.onrender.com';
 
 const CreditContext = createContext(undefined);
 
