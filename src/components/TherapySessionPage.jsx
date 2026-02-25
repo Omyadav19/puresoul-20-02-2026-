@@ -15,6 +15,7 @@ import CreditPopup from './CreditSystem/CreditPopup';
 import ProSessionsSidebar from './ProSessionsSidebar.jsx';
 import ProUpgradeBanner from './ProUpgradeBanner.jsx';
 import { createSession, endSession, fetchSessionMessages } from '../utils/proApi';
+import { API_BASE_URL } from '../utils/apiConfig';
 
 // ─── TTS Queue ────────────────────────────────────────────────────────────────
 class TTSQueue {
@@ -27,7 +28,10 @@ class TTSQueue {
 
     enqueue(text, fetchAudioFn) {
         if (!text || !text.trim()) return;
+        // Check if it was recently played or is already in the queue to prevent repeats
         if (this.lastPlayed === text) return;
+        if (this.queue.some(item => item.text === text)) return;
+
         this.queue.push({ text, fetchAudioFn });
         this._run();
     }
@@ -59,12 +63,15 @@ class TTSQueue {
     }
 }
 
-const fetchTTSAudioArrayBuffer = async (text) => {
+const fetchTTSAudioArrayBuffer = async (text, authToken) => {
     if (!text || !text.trim()) return null;
     try {
-        const resp = await fetch('https://puresoul-2026.onrender.com/api/text-to-speech', {
+        const resp = await fetch(`${API_BASE_URL}/api/text-to-speech`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
             body: JSON.stringify({ text }),
         });
         if (!resp.ok) return null;
@@ -184,11 +191,11 @@ const themeConfigs = {
 const TherapySessionPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { category = 'Mental Health', initialEmotion } = location.state || {};
+    const { category = 'Mental Health' } = location.state || {};
     const currentTheme = themeConfigs[category] || themeConfigs['Mental Health'];
     const CategoryIcon = currentTheme.icon;
 
-    const { user, addTherapySession, setSadDetectionCount, theme, toggleTheme, logout } = useApp();
+    const { user, currentEmotion, addTherapySession, setSadDetectionCount, theme, toggleTheme, logout } = useApp();
     const { credits, consumeCredit, refreshCredits } = useCredits();
 
     // ── State ──
@@ -247,20 +254,29 @@ const TherapySessionPage = () => {
     }, [user]);  // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Welcome message ──
+    const welcomeRef = useRef(false);
     useEffect(() => {
-        if (user && !welcomeMessageSent && ttsQueueRef.current) {
+        if (user && !welcomeRef.current && ttsQueueRef.current && messages.length === 0) {
+            welcomeRef.current = true;
             const welcomeText = currentTheme.welcome;
             const initialMessage = {
-                id: Date.now().toString(),
+                id: 'welcome-' + Date.now().toString(),
                 text: welcomeText,
                 sender: 'therapist',
                 timestamp: new Date(),
             };
             setMessages([initialMessage]);
-            ttsQueueRef.current.enqueue(initialMessage.text, fetchTTSAudioArrayBuffer);
             setWelcomeMessageSent(true);
+
+            // Small delay to ensure audio element is ready
+            setTimeout(() => {
+                const token = localStorage.getItem('authToken');
+                if (ttsQueueRef.current && user?.tier !== 'basic' && token) {
+                    ttsQueueRef.current.enqueue(initialMessage.text, (t) => fetchTTSAudioArrayBuffer(t, token));
+                }
+            }, 500);
         }
-    }, [user, welcomeMessageSent, currentTheme]);
+    }, [user, currentTheme, messages.length]);
 
     // ── Auto-scroll ──
     useEffect(() => {
@@ -292,7 +308,7 @@ const TherapySessionPage = () => {
     const getTherapeuticResponse = async (userMessage, messageHistory) => {
         try {
             const token = localStorage.getItem('authToken');
-            const response = await fetch('https://puresoul-2026.onrender.com/api/get-response', {
+            const response = await fetch(`${API_BASE_URL}/api/get-response`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -302,8 +318,8 @@ const TherapySessionPage = () => {
                     userMessage,
                     messageHistory: messageHistory.slice(-6),  // fallback for free users
                     category,
-                    session_id: sessionId,                     // Universal: backend loads from DB
-                    emotion: initialEmotion,                  // Pass emotion for dashboard stats
+                    session_id: sessionId,                     // Pro: backend loads from DB
+                    emotion: currentEmotion?.emotion || null,  // Cam-detected emotion
                 }),
             });
 
@@ -322,13 +338,18 @@ const TherapySessionPage = () => {
 
     // ── Send message ──
     const handleSendMessage = async () => {
-        if (!inputMessage.trim() || credits <= 0) {
+        if (!inputMessage.trim() || credits <= 0 || isTyping) {
             if (credits <= 0) setShowCreditPopup(true);
             return;
         }
 
+        setIsTyping(true);
         const success = await consumeCredit();
-        if (!success) { setShowCreditPopup(true); return; }
+        if (!success) {
+            setIsTyping(false);
+            setShowCreditPopup(true);
+            return;
+        }
 
         const userMessage = {
             id: Date.now().toString(),
@@ -338,10 +359,14 @@ const TherapySessionPage = () => {
         };
         setMessages((prev) => [...prev, userMessage]);
         setInputMessage('');
-        setIsTyping(true);
 
         const therapeuticResponse = await getTherapeuticResponse(inputMessage, [...messages, userMessage]);
-        const audioBufferList = await fetchTTSAudioArrayBuffer(therapeuticResponse);
+
+        let audioBufferList = null;
+        if (user?.tier !== 'basic') {
+            const token = localStorage.getItem('authToken');
+            audioBufferList = await fetchTTSAudioArrayBuffer(therapeuticResponse, token);
+        }
 
         setIsTyping(false);
 
@@ -375,7 +400,14 @@ const TherapySessionPage = () => {
         navigate('/emotion-detection');
     };
 
-    const toggleVoice = () => { if (isListening) stopListening(); else startListening(); };
+    const toggleVoice = () => {
+        if (user?.tier === 'basic') {
+            setShowUpgradeBanner(true);
+            return;
+        }
+        if (isListening) stopListening();
+        else startListening();
+    };
     const handleBuyCredits = () => navigate('/buy-credits');
 
     const isPro = user?.is_pro;
@@ -445,7 +477,11 @@ const TherapySessionPage = () => {
                             <h1 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{category}</h1>
                             <p className={`text-sm ${theme === 'dark' ? 'text-blue-200' : 'text-slate-500'}`}>
                                 Personalized Support • Confidential Safe Space
-                                {isPro && <span className="ml-2 text-purple-300 font-semibold">✦ Pro</span>}
+                                {isPro && (
+                                    <span className={`ml-2 font-semibold ${user?.tier === 'plus' ? 'text-pink-400' : 'text-purple-300'}`}>
+                                        ✦ {user?.tier?.toUpperCase()}
+                                    </span>
+                                )}
                             </p>
                         </div>
                     </div>
@@ -578,8 +614,8 @@ const TherapySessionPage = () => {
                                 onClick={handleSendMessage}
                                 whileHover={credits > 0 ? { scale: 1.05 } : {}}
                                 whileTap={credits > 0 ? { scale: 0.95 } : {}}
-                                disabled={!inputMessage.trim() || credits <= 0}
-                                className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${credits > 0
+                                disabled={!inputMessage.trim() || credits <= 0 || isTyping}
+                                className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${credits > 0 && !isTyping
                                     ? `${currentTheme.accent} text-white`
                                     : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                                     } disabled:opacity-50`}
