@@ -11,9 +11,8 @@ import { useApp } from '../context/AppContext.jsx';
 import { useCredits } from '../context/CreditContext';
 import { deleteSession } from '../utils/proApi';
 
-import { API_BASE_URL } from '../utils/apiConfig';
 
-const BASE_URL = API_BASE_URL;
+const BASE_URL = 'https://puresoul-2026.onrender.com';
 
 const EMOTION_COLORS_TEXT = {
   happy: 'text-emerald-400',
