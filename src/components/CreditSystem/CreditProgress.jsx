@@ -1,66 +1,109 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { useCredits } from '../../context/CreditContext';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useApp } from './AppContext';
 
-const CreditProgress = () => {
-    const { credits, totalCreditsPurchased } = useCredits();
-    const maxCredits = 12 + (totalCreditsPurchased || 0);
-    const progress = (credits / maxCredits) * 100;
+const CreditContext = createContext(undefined);
 
-    // Determine color based on remaining credits
-    const getProgressColor = () => {
-        if (credits <= 2) return 'bg-rose-500';
-        if (credits <= 5) return 'bg-amber-500';
-        return 'bg-blue-500';
+export const useCredits = () => {
+    const context = useContext(CreditContext);
+    if (!context) {
+        throw new Error('useCredits must be used within a CreditProvider');
+    }
+    return context;
+};
+
+export const CreditProvider = ({ children }) => {
+    const { user } = useApp();
+    const [credits, setCredits] = useState(user?.credits || 12);
+    const [totalCreditsPurchased, setTotalCreditsPurchased] = useState(user?.total_credits_purchased || 0);
+    const [isLoading, setIsLoading] = useState(false);
+
+    // Sync credits from user object in AppContext if it changes
+    useEffect(() => {
+        if (user) {
+            setCredits(user.credits);
+            setTotalCreditsPurchased(user.total_credits_purchased || 0);
+        }
+    }, [user]);
+
+    const refreshCredits = async () => {
+        if (!user) return;
+        setIsLoading(true);
+        try {
+            const token = localStorage.getItem('authToken');
+            const response = await fetch('https://puresoul-2026.onrender.com/api/credits', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setCredits(data.credits);
+                setTotalCreditsPurchased(data.total_credits_purchased || 0);
+            }
+        } catch (error) {
+            console.error('Failed to refresh credits:', error);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const getGlowColor = () => {
-        if (credits <= 2) return 'shadow-[0_0_10px_#f43f5e]';
-        if (credits <= 5) return 'shadow-[0_0_10px_#f59e0b]';
-        return 'shadow-[0_0_10px_#3b82f6]';
+    const consumeCredit = async () => {
+        if (!user) return;
+        try {
+            const token = localStorage.getItem('authToken');
+            const response = await fetch('https://puresoul-2026.onrender.com/api/credits/use', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setCredits(data.credits);
+                if (data.total_credits_purchased !== undefined) {
+                    setTotalCreditsPurchased(data.total_credits_purchased);
+                }
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Failed to consume credit:', error);
+            return false;
+        }
+    };
+
+    const addCredits = async (amount) => {
+        if (!user) return;
+        try {
+            const token = localStorage.getItem('authToken');
+            const response = await fetch('https://puresoul-2026.onrender.com/api/credits/buy', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ amount })
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setCredits(data.credits);
+                setTotalCreditsPurchased(data.total_credits_purchased);
+            }
+        } catch (error) {
+            console.error('Failed to add credits:', error);
+        }
     };
 
     return (
-        <div className="flex flex-col gap-2 w-full max-w-[200px]">
-            <div className="flex justify-between items-end px-1">
-                <span className="text-[10px] uppercase tracking-widest font-black text-white/40">
-                    Energy Balance
-                </span>
-                <span className={`text-xs font-bold ${progress <= 20 ? 'text-rose-400' : 'text-blue-300'}`}>
-                    {credits} / {maxCredits}
-                </span>
-            </div>
-
-            <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden border border-white/10 relative">
-                <motion.div
-                    initial={{ width: '100%' }}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ type: 'spring', stiffness: 50, damping: 20 }}
-                    className={`h-full rounded-full ${getProgressColor()} ${getGlowColor()} transition-colors duration-500`}
-                />
-            </div>
-
-            {credits <= 3 && credits > 0 && (
-                <motion.p
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-[9px] text-amber-400/80 font-medium italic animate-pulse px-1"
-                >
-                    Low credits! Conserving energy 😊
-                </motion.p>
-            )}
-
-            {credits === 0 && (
-                <motion.p
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-[9px] text-rose-400 font-bold uppercase tracking-tighter px-1"
-                >
-                    Out of energy. Please recharge 💛
-                </motion.p>
-            )}
-        </div>
+        <CreditContext.Provider value={{
+            credits,
+            totalCreditsPurchased,
+            consumeCredit,
+            addCredits,
+            refreshCredits,
+            isLoading
+        }}>
+            {children}
+        </CreditContext.Provider>
     );
 };
-
-export default CreditProgress;
