@@ -12,7 +12,7 @@ export const useCredits = () => {
 };
 
 export const CreditProvider = ({ children }) => {
-    const { user } = useApp();
+    const { user, setUser } = useApp();
     const [credits, setCredits] = useState(user?.credits || 12);
     const [totalCreditsPurchased, setTotalCreditsPurchased] = useState(user?.total_credits_purchased || 0);
     const [isLoading, setIsLoading] = useState(false);
@@ -37,8 +37,21 @@ export const CreditProvider = ({ children }) => {
             });
             if (response.ok) {
                 const data = await response.json();
-                setCredits(data.credits);
-                setTotalCreditsPurchased(data.total_credits_purchased || 0);
+                const newCredits = data.credits;
+                const newTotalPurchased = data.total_credits_purchased || 0;
+
+                setCredits(newCredits);
+                setTotalCreditsPurchased(newTotalPurchased);
+
+                // Sync with AppContext and localStorage
+                const updatedUser = {
+                    ...user,
+                    credits: newCredits,
+                    total_credits_purchased: newTotalPurchased,
+                    is_pro: data.is_pro
+                };
+                localStorage.setItem('userData', JSON.stringify(updatedUser));
+                setUser(updatedUser);
             }
         } catch (error) {
             console.error('Failed to refresh credits:', error);
@@ -59,10 +72,21 @@ export const CreditProvider = ({ children }) => {
             });
             if (response.ok) {
                 const data = await response.json();
-                setCredits(data.credits);
-                if (data.total_credits_purchased !== undefined) {
-                    setTotalCreditsPurchased(data.total_credits_purchased);
-                }
+                const newCredits = data.credits;
+                const newTotalPurchased = data.total_credits_purchased !== undefined ? data.total_credits_purchased : totalCreditsPurchased;
+
+                setCredits(newCredits);
+                setTotalCreditsPurchased(newTotalPurchased);
+
+                // Sync with AppContext and localStorage
+                const updatedUser = {
+                    ...user,
+                    credits: newCredits,
+                    total_credits_purchased: newTotalPurchased
+                };
+                localStorage.setItem('userData', JSON.stringify(updatedUser));
+                setUser(updatedUser);
+
                 return true;
             }
             return false;
@@ -86,8 +110,20 @@ export const CreditProvider = ({ children }) => {
             });
             if (response.ok) {
                 const data = await response.json();
-                setCredits(data.credits);
-                setTotalCreditsPurchased(data.total_credits_purchased);
+                const newCredits = data.credits;
+                const newTotalPurchased = data.total_credits_purchased;
+
+                setCredits(newCredits);
+                setTotalCreditsPurchased(newTotalPurchased);
+
+                // Sync with AppContext and localStorage
+                const updatedUser = {
+                    ...user,
+                    credits: newCredits,
+                    total_credits_purchased: newTotalPurchased
+                };
+                localStorage.setItem('userData', JSON.stringify(updatedUser));
+                setUser(updatedUser);
             }
         } catch (error) {
             console.error('Failed to add credits:', error);
